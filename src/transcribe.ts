@@ -1,27 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
 
 import type { AppConfig } from "./config.js";
 
 export async function transcribeFile(filePath: string, config: AppConfig): Promise<string> {
   const audioData = await readFile(filePath);
-
-  const form = new FormData();
-  form.append(
-    config.audioField,
-    new Blob([audioData], {
-      type: "audio/wav"
-    }),
-    basename(filePath)
-  );
-
-  if (config.model) {
-    form.append("model", config.model);
-  }
-
-  if (config.language) {
-    form.append("language", config.language);
-  }
+  const payload = buildPayload(audioData, config);
 
   const abortController = new AbortController();
   const timeout = setTimeout(() => {
@@ -32,7 +15,7 @@ export async function transcribeFile(filePath: string, config: AppConfig): Promi
     const response = await fetch(config.endpoint, {
       method: "POST",
       headers: buildHeaders(config),
-      body: form,
+      body: JSON.stringify(payload),
       signal: abortController.signal
     });
 
@@ -41,25 +24,13 @@ export async function transcribeFile(filePath: string, config: AppConfig): Promi
       throw new Error(`Backend returned ${response.status}: ${truncate(body, 400)}`);
     }
 
-    const contentType = response.headers.get("content-type") ?? "";
-
-    if (contentType.includes("application/json")) {
-      const payload: unknown = await response.json();
-      const text = extractText(payload, config.textField);
-
-      if (!text) {
-        throw new Error(`JSON response is missing string field "${config.textField}"`);
-      }
-
-      return text;
+    const responsePayload: unknown = await response.json();
+    const text = extractCompletionText(responsePayload);
+    if (!text) {
+      throw new Error("JSON response is missing choices[0].message.content");
     }
 
-    const plainText = (await response.text()).trim();
-    if (!plainText) {
-      throw new Error("Backend response body is empty");
-    }
-
-    return plainText;
+    return text;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`Transcription timed out after ${config.requestTimeoutMs}ms`);
@@ -72,44 +43,145 @@ export async function transcribeFile(filePath: string, config: AppConfig): Promi
 }
 
 function buildHeaders(config: AppConfig): HeadersInit {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
+  };
+
   if (!config.apiKey) {
-    return {};
+    return headers;
   }
 
+  headers.Authorization = `Bearer ${config.apiKey}`;
+  return headers;
+}
+
+function buildPayload(audioData: Buffer, config: AppConfig): Record<string, unknown> {
+  const audioDataUrl = `data:audio/wav;base64,${audioData.toString("base64")}`;
+  const prompt = buildPrompt(config.prompt, config.language);
+
   return {
-    Authorization: `Bearer ${config.apiKey}`
+    model: config.model,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "audio_url",
+            audio_url: {
+              url: audioDataUrl
+            }
+          },
+          {
+            type: "text",
+            text: prompt
+          }
+        ]
+      }
+    ],
+    temperature: 0,
+    max_tokens: config.maxTokens
   };
 }
 
-function extractText(payload: unknown, path: string): string | null {
-  const segments = path.split(".").filter((segment) => segment.length > 0);
-  let current: unknown = payload;
+function buildPrompt(basePrompt: string, language: string | undefined): string {
+  if (!language) {
+    return basePrompt;
+  }
 
-  for (const segment of segments) {
-    if (Array.isArray(current)) {
-      const index = Number.parseInt(segment, 10);
-      if (!Number.isInteger(index)) {
-        return null;
+  return `${basePrompt} Use language: ${language}.`;
+}
+
+function extractCompletionText(payload: unknown): string | null {
+  const choices = getObjectValue(payload, "choices");
+  if (!Array.isArray(choices) || choices.length === 0) {
+    return null;
+  }
+
+  const firstChoice = choices[0];
+  const message = getObjectValue(firstChoice, "message");
+  const content = getObjectValue(message, "content");
+  const normalized = normalizeOpenAiContent(content);
+  if (!normalized) {
+    return null;
+  }
+
+  const parsedAsJson = parseJsonText(normalized);
+  if (parsedAsJson) {
+    const textValue = getObjectValue(parsedAsJson, "text");
+    if (typeof textValue === "string" && textValue.trim().length > 0) {
+      return textValue.trim();
+    }
+  }
+
+  return normalized;
+}
+
+function getObjectValue(value: unknown, key: string): unknown {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  return (value as Record<string, unknown>)[key];
+}
+
+function normalizeOpenAiContent(content: unknown): string | null {
+  if (typeof content === "string") {
+    const text = stripCodeFence(content).trim();
+    return text.length > 0 ? text : null;
+  }
+
+  if (!Array.isArray(content)) {
+    return null;
+  }
+
+  const textParts = content
+    .map((part) => {
+      if (typeof part !== "object" || part === null) {
+        return "";
       }
 
-      current = current[index];
-      continue;
-    }
+      const partType = (part as Record<string, unknown>).type;
+      if (partType !== "text") {
+        return "";
+      }
 
-    if (typeof current === "object" && current !== null) {
-      current = (current as Record<string, unknown>)[segment];
-      continue;
-    }
+      const text = (part as Record<string, unknown>).text;
+      return typeof text === "string" ? text : "";
+    })
+    .filter((text) => text.trim().length > 0);
 
+  if (textParts.length === 0) {
     return null;
   }
 
-  if (typeof current !== "string") {
+  return stripCodeFence(textParts.join("\n")).trim();
+}
+
+function parseJsonText(raw: string): Record<string, unknown> | null {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
     return null;
   }
 
-  const trimmed = current.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function stripCodeFence(text: string): string {
+  const match = text.match(/^```(?:json|text)?\s*([\s\S]*?)\s*```$/i);
+  if (!match || !match[1]) {
+    return text;
+  }
+
+  return match[1];
 }
 
 function truncate(text: string, maxLength: number): string {

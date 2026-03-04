@@ -9,10 +9,10 @@ export interface AppConfig {
   recordArgs: string[];
   clipboardCommand: string;
   notifyCommand: string;
-  audioField: string;
-  textField: string;
-  model: string | undefined;
+  model: string;
+  prompt: string;
   language: string | undefined;
+  maxTokens: number;
   requestTimeoutMs: number;
 }
 
@@ -23,17 +23,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   return {
     socketPath: env.VOICE_SOCKET_PATH ?? join(runtimeDir, "omaboard-voice.sock"),
-    endpoint: env.VOICE_ENDPOINT ?? "http://127.0.0.1:8787/transcribe",
+    endpoint: env.VOICE_ENDPOINT ?? "http://127.0.0.1:8000/v1/chat/completions",
     apiKey: normalizeOptional(env.VOICE_API_KEY),
     tmpDir: env.VOICE_TMP_DIR ?? "/tmp",
     recordCommand: env.VOICE_RECORD_COMMAND ?? "pw-record",
     recordArgs: parseArgs(env.VOICE_RECORD_ARGS) ?? DEFAULT_RECORD_ARGS,
     clipboardCommand: env.VOICE_CLIPBOARD_COMMAND ?? "wl-copy",
     notifyCommand: env.VOICE_NOTIFY_COMMAND ?? "notify-send",
-    audioField: env.VOICE_AUDIO_FIELD ?? "file",
-    textField: env.VOICE_TEXT_FIELD ?? "text",
-    model: normalizeOptional(env.VOICE_MODEL),
+    model: normalizeOptional(env.VOICE_MODEL) ?? "Qwen/Qwen3-ASR-1.7B",
+    prompt:
+      normalizeOptional(env.VOICE_PROMPT) ??
+      "Please transcribe the audio and return plain text only.",
     language: normalizeOptional(env.VOICE_LANGUAGE),
+    maxTokens: parsePositiveInt(env.VOICE_MAX_TOKENS, 1024),
     requestTimeoutMs: parsePositiveInt(env.VOICE_REQUEST_TIMEOUT_MS, 45_000)
   };
 }

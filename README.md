@@ -28,7 +28,7 @@ npm link
 1. Start daemon in one terminal:
 
 ```bash
-VOICE_ENDPOINT=http://127.0.0.1:8787/transcribe node dist/daemon.js
+VOICE_ENDPOINT=http://127.0.0.1:8000/v1/chat/completions node dist/daemon.js
 ```
 
 2. Trigger actions in another terminal:
@@ -52,7 +52,7 @@ bindr = SUPER, V, exec, voicectl stop
 
 ## Environment variables
 
-- `VOICE_ENDPOINT`: HTTP endpoint for transcription API.
+- `VOICE_ENDPOINT`: OpenAI-compatible chat completions endpoint.
 - `VOICE_API_KEY`: optional bearer token.
 - `VOICE_SOCKET_PATH`: Unix socket path. Default: `$XDG_RUNTIME_DIR/omaboard-voice.sock`.
 - `VOICE_TMP_DIR`: temp dir for wav file. Default: `/tmp`.
@@ -60,10 +60,10 @@ bindr = SUPER, V, exec, voicectl stop
 - `VOICE_RECORD_ARGS`: recorder args. Default: `--rate 16000 --channels 1`.
 - `VOICE_CLIPBOARD_COMMAND`: clipboard command. Default: `wl-copy`.
 - `VOICE_NOTIFY_COMMAND`: notification command. Default: `notify-send`.
-- `VOICE_AUDIO_FIELD`: multipart field name for audio. Default: `file`.
-- `VOICE_TEXT_FIELD`: JSON text field path. Default: `text`.
-- `VOICE_MODEL`: optional model field in multipart form.
-- `VOICE_LANGUAGE`: optional language field in multipart form.
+- `VOICE_MODEL`: OpenAI request model. Default: `Qwen/Qwen3-ASR-1.7B`.
+- `VOICE_PROMPT`: extra prompt text. Default: `Please transcribe the audio and return plain text only.`
+- `VOICE_LANGUAGE`: optional language hint appended to prompt.
+- `VOICE_MAX_TOKENS`: `max_tokens` in request body. Default: `1024`.
 - `VOICE_REQUEST_TIMEOUT_MS`: request timeout in ms. Default: `45000`.
 
 ## Local mock backend (for smoke test)
@@ -74,10 +74,18 @@ Run:
 node examples/mock-backend.mjs
 ```
 
-This server accepts multipart uploads and always returns:
+This server accepts OpenAI `/v1/chat/completions` payload and always returns:
 
 ```json
-{ "text": "mock transcription from local backend" }
+{
+  "choices": [
+    {
+      "message": {
+        "content": "mock transcription from local backend"
+      }
+    }
+  ]
+}
 ```
 
 ## Production note
