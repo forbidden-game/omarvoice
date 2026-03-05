@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { AppConfig } from "./config.js";
 import type { VoiceAction, VoiceResponse } from "./ipc.js";
 import { transitionState, type VoiceState } from "./state-machine.js";
-import { copyToClipboard, sendNotification } from "./system.js";
+import { copyToClipboard, playSound, sendNotification } from "./system.js";
 import { transcribeFile } from "./transcribe.js";
 
 export class VoiceService {
@@ -91,6 +91,7 @@ export class VoiceService {
     this.recordingFilePath = filePath;
     this.state = transitionState(this.state, "start");
     this.lastError = null;
+    this.playStartSoundBestEffort();
 
     return {
       ok: true,
@@ -121,6 +122,7 @@ export class VoiceService {
     try {
       await this.stopRecorder(recorder);
       this.recorder = null;
+      this.playStopSoundBestEffort();
 
       const text = await transcribeFile(recordingFilePath, this.config);
       await copyToClipboard(this.config.clipboardCommand, text);
@@ -270,6 +272,16 @@ export class VoiceService {
 
   private async notifyBestEffort(title: string, body: string): Promise<void> {
     await sendNotification(this.config.notifyCommand, title, body).catch(() => undefined);
+  }
+
+  private playStartSoundBestEffort(): void {
+    void playSound(this.config.startSoundCommand, this.config.startSoundArgs).catch(
+      () => undefined
+    );
+  }
+
+  private playStopSoundBestEffort(): void {
+    void playSound(this.config.stopSoundCommand, this.config.stopSoundArgs).catch(() => undefined);
   }
 
   private attachRuntimeRecorderListeners(recorder: ChildProcess): void {

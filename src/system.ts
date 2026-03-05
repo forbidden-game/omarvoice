@@ -12,6 +12,10 @@ export async function sendNotification(
   await runCommand(command, [title, body]);
 }
 
+export async function playSound(command: string, args: string[]): Promise<void> {
+  await runCommand(command, args);
+}
+
 async function runCommand(command: string, args: string[], input?: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, {

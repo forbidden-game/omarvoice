@@ -7,6 +7,7 @@ Push-to-talk voice input daemon for omarchy/Hyprland.
 - Press hotkey -> start recording (`pw-record`)
 - Release hotkey -> stop recording, send audio to backend LLM/STT API
 - Get transcription text -> copy to clipboard (`wl-copy`)
+- Play start/stop prompt sounds on hotkey press/release
 - Show desktop notification (`notify-send`)
 
 ## Architecture
@@ -58,6 +59,10 @@ bindr = SUPER, V, exec, voicectl stop
 - `VOICE_TMP_DIR`: temp dir for wav file. Default: `/tmp`.
 - `VOICE_RECORD_COMMAND`: recorder command. Default: `pw-record`.
 - `VOICE_RECORD_ARGS`: recorder args. Default: `--rate 16000 --channels 1`.
+- `VOICE_START_SOUND_COMMAND`: command for start prompt sound. Default: `pw-play`.
+- `VOICE_START_SOUND_ARGS`: args for start prompt sound command. Default: `/usr/share/sounds/freedesktop/stereo/bell.oga`.
+- `VOICE_STOP_SOUND_COMMAND`: command for stop prompt sound. Default: `pw-play`.
+- `VOICE_STOP_SOUND_ARGS`: args for stop prompt sound command. Default: `/usr/share/sounds/freedesktop/stereo/complete.oga`.
 - `VOICE_CLIPBOARD_COMMAND`: clipboard command. Default: `wl-copy`.
 - `VOICE_NOTIFY_COMMAND`: notification command. Default: `notify-send`.
 - `VOICE_MODEL`: OpenAI request model. Default: `Qwen/Qwen3-ASR-1.7B`.

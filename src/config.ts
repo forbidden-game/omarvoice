@@ -7,6 +7,10 @@ export interface AppConfig {
   tmpDir: string;
   recordCommand: string;
   recordArgs: string[];
+  startSoundCommand: string;
+  startSoundArgs: string[];
+  stopSoundCommand: string;
+  stopSoundArgs: string[];
   clipboardCommand: string;
   notifyCommand: string;
   model: string;
@@ -17,6 +21,8 @@ export interface AppConfig {
 }
 
 const DEFAULT_RECORD_ARGS = ["--rate", "16000", "--channels", "1"];
+const DEFAULT_START_SOUND_ARGS = ["/usr/share/sounds/freedesktop/stereo/bell.oga"];
+const DEFAULT_STOP_SOUND_ARGS = ["/usr/share/sounds/freedesktop/stereo/complete.oga"];
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const runtimeDir = env.XDG_RUNTIME_DIR ?? "/tmp";
@@ -28,6 +34,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     tmpDir: env.VOICE_TMP_DIR ?? "/tmp",
     recordCommand: env.VOICE_RECORD_COMMAND ?? "pw-record",
     recordArgs: parseArgs(env.VOICE_RECORD_ARGS) ?? DEFAULT_RECORD_ARGS,
+    startSoundCommand: env.VOICE_START_SOUND_COMMAND ?? "pw-play",
+    startSoundArgs: parseArgs(env.VOICE_START_SOUND_ARGS) ?? DEFAULT_START_SOUND_ARGS,
+    stopSoundCommand: env.VOICE_STOP_SOUND_COMMAND ?? "pw-play",
+    stopSoundArgs: parseArgs(env.VOICE_STOP_SOUND_ARGS) ?? DEFAULT_STOP_SOUND_ARGS,
     clipboardCommand: env.VOICE_CLIPBOARD_COMMAND ?? "wl-copy",
     notifyCommand: env.VOICE_NOTIFY_COMMAND ?? "notify-send",
     model: normalizeOptional(env.VOICE_MODEL) ?? "Qwen/Qwen3-ASR-1.7B",
