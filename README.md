@@ -4,6 +4,8 @@ Push-to-talk voice input daemon for Omarchy/Hyprland.
 
 ## Demo
 
+[▶ Watch Demo With Sound (MP4)](./assets/demo.mp4)
+
 [![omaboard-voice demo](./assets/demo.gif)](./assets/demo.mp4)
 
 - GIF preview: `assets/demo.gif`
