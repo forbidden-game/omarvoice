@@ -96,8 +96,9 @@ WantedBy=default.target
 ```ini
 [Unit]
 Description=Omaboard voice daemon
-After=network-online.target omaboard-voice-tunnel.service
+After=graphical-session.target network-online.target omaboard-voice-tunnel.service
 Wants=network-online.target omaboard-voice-tunnel.service
+PartOf=graphical-session.target
 
 [Service]
 Type=simple
@@ -111,7 +112,7 @@ Restart=always
 RestartSec=2
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target
 ```
 
 3. Enable and start:
@@ -143,6 +144,7 @@ Notes:
   - Check logs with `journalctl --user -u omaboard-voice.service -f`.
 - No transcript copied to clipboard:
   - Confirm `wl-copy` exists: `which wl-copy`.
+  - If you see `Failed to connect to a Wayland server`, make sure `omaboard-voice.service` is started in `graphical-session.target` (not `default.target`) so `WAYLAND_DISPLAY` is available.
 - Microphone not recording:
   - Confirm PipeWire tools exist: `which pw-record`.
   - If needed, set `VOICE_RECORD_ARGS` with your device target.
