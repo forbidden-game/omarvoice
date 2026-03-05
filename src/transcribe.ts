@@ -4,8 +4,8 @@ import type { AppConfig } from "./config.js";
 
 const MAX_TRANSCRIBE_ATTEMPTS = 2;
 const FILLER_WORD_BOUNDARY = "\\s,，.。!?！？、;；:：";
-const FILLER_WORD_PATTERN = new RegExp(
-  `(^|[${FILLER_WORD_BOUNDARY}])(?:呃|恶)+(?=($|[${FILLER_WORD_BOUNDARY}]))`,
+const STANDALONE_E_PATTERN = new RegExp(
+  `(^|[${FILLER_WORD_BOUNDARY}])(?:恶)+(?=($|[${FILLER_WORD_BOUNDARY}]))`,
   "g"
 );
 
@@ -269,7 +269,8 @@ function normalizeTranscriptText(text: string): string | null {
 
 function sanitizeFillerWords(text: string): string {
   return text
-    .replace(FILLER_WORD_PATTERN, "$1")
+    .replace(/呃+/g, "")
+    .replace(STANDALONE_E_PATTERN, "$1")
     .replace(/[，,、;；:：]\s*[，,、;；:：]+/g, "，")
     .replace(/^[，,。.!?！？、;；:：\s]+/g, "")
     .replace(/[，,、;；:：\s]+$/g, "")

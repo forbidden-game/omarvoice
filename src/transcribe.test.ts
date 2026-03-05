@@ -97,6 +97,21 @@ describe("transcribeFile retry behavior", () => {
     }
   });
 
+  it("removes 呃 even when it appears inside a sentence", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("这个呃功能反馈很呃快。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "这个功能反馈很快。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
   it("keeps normal words that contain 恶 as part of content", async () => {
     const { dirPath, filePath } = await createTempAudioFile();
     const config = createTestConfig();
