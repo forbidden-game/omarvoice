@@ -134,7 +134,7 @@ PartOf=graphical-session.target
 Type=simple
 WorkingDirectory=/absolute/path/to/omaboard
 Environment=VOICE_ENDPOINT=http://127.0.0.1:18000/v1/chat/completions
-Environment=VOICE_MODEL=qwen3-asr
+Environment=VOICE_MODEL=Qwen/Qwen3-ASR-1.7B
 Environment=VOICE_LANGUAGE=zh
 Environment="VOICE_RECORD_ARGS=--rate 16000 --channels 1 --target <your-mic-source-name>"
 ExecStart=/absolute/path/to/node /absolute/path/to/omaboard/dist/daemon.js
