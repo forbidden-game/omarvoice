@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Push-to-talk voice input daemon for omarchy",
+  "license": "MIT",
   "bin": {
     "voicectl": "dist/cli.js",
     "voice-daemon": "dist/daemon.js"
