@@ -70,6 +70,7 @@ bindr = SUPER, V, exec, voicectl stop
 - `VOICE_LANGUAGE`: optional language hint appended to prompt.
 - `VOICE_MAX_TOKENS`: `max_tokens` in request body. Default: `1024`.
 - `VOICE_REQUEST_TIMEOUT_MS`: request timeout in ms. Default: `45000`.
+  On timeout or empty transcript, the daemon retries once automatically.
 
 ## Local mock backend (for smoke test)
 

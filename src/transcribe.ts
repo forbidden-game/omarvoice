@@ -2,10 +2,47 @@ import { readFile } from "node:fs/promises";
 
 import type { AppConfig } from "./config.js";
 
+const MAX_TRANSCRIBE_ATTEMPTS = 2;
+
+type TranscribeErrorCode = "timeout" | "emptyTranscript" | "backend" | "unknown";
+
+class TranscribeError extends Error {
+  public constructor(
+    message: string,
+    public readonly code: TranscribeErrorCode = "unknown"
+  ) {
+    super(message);
+    this.name = "TranscribeError";
+  }
+}
+
 export async function transcribeFile(filePath: string, config: AppConfig): Promise<string> {
   const audioData = await readFile(filePath);
   const payload = buildPayload(audioData, config);
+  let lastError: Error | null = null;
 
+  for (let attempt = 1; attempt <= MAX_TRANSCRIBE_ATTEMPTS; attempt += 1) {
+    try {
+      return await submitTranscriptionRequest(payload, config);
+    } catch (error) {
+      const normalizedError = normalizeError(error);
+      lastError = normalizedError;
+
+      if (attempt < MAX_TRANSCRIBE_ATTEMPTS && isRetryableTranscriptionError(normalizedError)) {
+        continue;
+      }
+
+      throw normalizedError;
+    }
+  }
+
+  throw lastError ?? new Error("Transcription failed");
+}
+
+async function submitTranscriptionRequest(
+  payload: Record<string, unknown>,
+  config: AppConfig
+): Promise<string> {
   const abortController = new AbortController();
   const timeout = setTimeout(() => {
     abortController.abort();
@@ -21,25 +58,47 @@ export async function transcribeFile(filePath: string, config: AppConfig): Promi
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Backend returned ${response.status}: ${truncate(body, 400)}`);
+      throw new TranscribeError(
+        `Backend returned ${response.status}: ${truncate(body, 400)}`,
+        "backend"
+      );
     }
 
     const responsePayload: unknown = await response.json();
     const text = extractCompletionText(responsePayload);
     if (!text) {
-      throw new Error("Backend returned empty transcript");
+      throw new TranscribeError("Backend returned empty transcript", "emptyTranscript");
     }
 
     return text;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Transcription timed out after ${config.requestTimeoutMs}ms`);
+      throw new TranscribeError(
+        `Transcription timed out after ${config.requestTimeoutMs}ms`,
+        "timeout"
+      );
     }
 
-    throw error;
+    throw normalizeError(error);
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function normalizeError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error(String(error));
+}
+
+function isRetryableTranscriptionError(error: Error): boolean {
+  if (!(error instanceof TranscribeError)) {
+    return false;
+  }
+
+  return error.code === "timeout" || error.code === "emptyTranscript";
 }
 
 function buildHeaders(config: AppConfig): HeadersInit {
