@@ -4,6 +4,53 @@ import type { AppConfig } from "./config.js";
 
 const MAX_TRANSCRIBE_ATTEMPTS = 2;
 const FILLER_WORD_BOUNDARY = "\\s,，.。!?！？、;；:：";
+const CHINESE_DIGIT_MAP: Record<string, string> = {
+  零: "0",
+  〇: "0",
+  一: "1",
+  二: "2",
+  两: "2",
+  三: "3",
+  四: "4",
+  五: "5",
+  六: "6",
+  七: "7",
+  八: "8",
+  九: "9"
+};
+const CHINESE_SMALL_UNIT_MAP: Record<string, number> = {
+  十: 10,
+  百: 100,
+  千: 1000
+};
+const CHINESE_LARGE_UNIT_MAP: Record<string, number> = {
+  万: 10_000,
+  亿: 100_000_000
+};
+const CHINESE_INTEGER_PATTERN = /^[零〇一二两三四五六七八九十百千万亿]+$/;
+const CHINESE_DIGIT_SEQUENCE_PATTERN = /^[零〇一二两三四五六七八九]+$/;
+const VERSION_PATTERN =
+  /版本\s*([零〇一二两三四五六七八九十百千万亿]+(?:点[零〇一二两三四五六七八九十百千万亿]+)+)/g;
+const PERCENTAGE_PATTERN =
+  /百分之([零〇一二两三四五六七八九十百千万亿点]+)(?![零〇一二两三四五六七八九十百千万亿点])/g;
+const DECIMAL_PATTERN =
+  /([零〇一二两三四五六七八九十百千万亿]+)点([零〇一二两三四五六七八九]{1,6})/g;
+const DECIMAL_TIME_PREFIXES = [
+  "上午",
+  "下午",
+  "晚上",
+  "凌晨",
+  "早上",
+  "中午",
+  "傍晚",
+  "今晚",
+  "今早",
+  "明早",
+  "夜里",
+  "星期",
+  "礼拜"
+];
+const DECIMAL_TIME_SUFFIX_CHARS = new Set(["分", "秒", "整", "半", "刻", "钟", "鐘"]);
 const STANDALONE_E_PATTERN = new RegExp(
   `(^|[${FILLER_WORD_BOUNDARY}])(?:恶)+(?=($|[${FILLER_WORD_BOUNDARY}]))`,
   "g"
@@ -264,7 +311,8 @@ function normalizeTranscriptText(text: string): string | null {
     return null;
   }
 
-  return sanitized;
+  const numericNormalized = normalizeNumericText(sanitized);
+  return numericNormalized.length > 0 ? numericNormalized : sanitized;
 }
 
 function sanitizeTranscriptText(text: string): string {
@@ -277,6 +325,151 @@ function sanitizeTranscriptText(text: string): string {
     .replace(/(?:！|!)+/g, (match) => (match.includes("！") ? "。" : "."))
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+function normalizeNumericText(text: string): string {
+  return normalizeStandaloneDecimals(normalizePercentages(normalizeVersions(text)));
+}
+
+function normalizeVersions(text: string): string {
+  return text.replace(VERSION_PATTERN, (match, rawVersion) => {
+    const normalizedVersion = parseChineseVersion(rawVersion);
+    if (!normalizedVersion) {
+      return match;
+    }
+
+    return `版本 ${normalizedVersion}`;
+  });
+}
+
+function normalizePercentages(text: string): string {
+  return text.replace(PERCENTAGE_PATTERN, (match, rawNumber) => {
+    const normalizedNumber = parseChineseNumber(rawNumber);
+    if (!normalizedNumber) {
+      return match;
+    }
+
+    return `${normalizedNumber}%`;
+  });
+}
+
+function normalizeStandaloneDecimals(text: string): string {
+  return text.replace(DECIMAL_PATTERN, (match, rawInteger, rawFraction, offset, source) => {
+    if (shouldKeepAsTime(source, offset, match.length)) {
+      return match;
+    }
+
+    const integerPart = parseChineseInteger(rawInteger);
+    const fractionPart = parseChineseDigitSequence(rawFraction);
+    if (!integerPart || !fractionPart) {
+      return match;
+    }
+
+    return `${integerPart}.${fractionPart}`;
+  });
+}
+
+function shouldKeepAsTime(text: string, offset: number, matchLength: number): boolean {
+  const preceding = text.slice(Math.max(0, offset - 2), offset);
+  if (preceding === "周") {
+    return true;
+  }
+
+  if (DECIMAL_TIME_PREFIXES.some((prefix) => preceding.endsWith(prefix))) {
+    return true;
+  }
+
+  const nextChar = text.at(offset + matchLength);
+  return nextChar ? DECIMAL_TIME_SUFFIX_CHARS.has(nextChar) : false;
+}
+
+function parseChineseVersion(value: string): string | null {
+  const segments = value.split("点");
+  if (segments.length < 2) {
+    return null;
+  }
+
+  const normalizedSegments = segments.map((segment) => parseChineseInteger(segment));
+  return normalizedSegments.every((segment) => Boolean(segment))
+    ? normalizedSegments.join(".")
+    : null;
+}
+
+function parseChineseNumber(value: string): string | null {
+  if (value.includes("点")) {
+    const parts = value.split("点");
+    if (parts.length !== 2) {
+      return null;
+    }
+
+    const [integerSource, fractionSource] = parts;
+    if (integerSource === undefined || fractionSource === undefined) {
+      return null;
+    }
+
+    const integerPart = parseChineseInteger(integerSource);
+    const fractionPart = parseChineseDigitSequence(fractionSource);
+    if (!integerPart || !fractionPart) {
+      return null;
+    }
+
+    return `${integerPart}.${fractionPart}`;
+  }
+
+  return parseChineseInteger(value);
+}
+
+function parseChineseInteger(value: string): string | null {
+  if (!CHINESE_INTEGER_PATTERN.test(value)) {
+    return null;
+  }
+
+  if (CHINESE_DIGIT_SEQUENCE_PATTERN.test(value)) {
+    return String(Number.parseInt(parseChineseDigitSequence(value) ?? "", 10));
+  }
+
+  let total = 0;
+  let section = 0;
+  let currentDigit = 0;
+
+  for (const char of value) {
+    const digitValue = CHINESE_DIGIT_MAP[char];
+    if (digitValue !== undefined) {
+      currentDigit = Number.parseInt(digitValue, 10);
+      continue;
+    }
+
+    const smallUnit = CHINESE_SMALL_UNIT_MAP[char];
+    if (smallUnit !== undefined) {
+      section += (currentDigit || 1) * smallUnit;
+      currentDigit = 0;
+      continue;
+    }
+
+    const largeUnit = CHINESE_LARGE_UNIT_MAP[char];
+    if (largeUnit !== undefined) {
+      section += currentDigit;
+      total += (section || 1) * largeUnit;
+      section = 0;
+      currentDigit = 0;
+      continue;
+    }
+
+    return null;
+  }
+
+  return String(total + section + currentDigit);
+}
+
+function parseChineseDigitSequence(value: string): string | null {
+  if (!CHINESE_DIGIT_SEQUENCE_PATTERN.test(value)) {
+    return null;
+  }
+
+  return value
+    .split("")
+    .map((char) => CHINESE_DIGIT_MAP[char] ?? "")
+    .join("");
 }
 
 function truncate(text: string, maxLength: number): string {

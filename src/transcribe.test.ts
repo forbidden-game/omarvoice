@@ -141,6 +141,66 @@ describe("transcribeFile retry behavior", () => {
       await rm(dirPath, { recursive: true, force: true });
     }
   });
+
+  it("normalizes percentages into percent symbols", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("今天转化率提升了百分之十五。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "今天转化率提升了15%。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes version phrases into dotted numerals", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("请升级到版本五点四点一。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "请升级到版本 5.4.1。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes safe standalone decimals into arabic numerals", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("这个版本大概五点四，先这样发。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "这个版本大概5.4，先这样发。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps likely time expressions in chinese numerals", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("我们下午五点四十开会，别迟到。")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "我们下午五点四十开会，别迟到。");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
 });
 
 function createTestConfig() {
