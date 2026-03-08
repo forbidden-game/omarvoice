@@ -1,10 +1,9 @@
 import { spawn } from "node:child_process";
 
 const WAYLAND_CLIPBOARD_COMMAND = "wl-copy";
-const WAYLAND_CLIPBOARD_ARGS = ["--foreground"];
 
 export async function copyToClipboard(command: string, text: string): Promise<void> {
-  const args = command === WAYLAND_CLIPBOARD_COMMAND ? WAYLAND_CLIPBOARD_ARGS : [];
+  const args: string[] = [];
   await runCommand(command, args, text);
 }
 

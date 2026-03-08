@@ -7,10 +7,10 @@ import { describe, it } from "node:test";
 import { copyToClipboard } from "./system.js";
 
 describe("copyToClipboard", () => {
-  it("runs wl-copy in foreground mode so errors are observable", async () => {
+  it("waits for wl-copy to finish successfully", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "omarvoice-system-"));
     const dataPath = join(workspace, "stdin.txt");
-    const argsPath = join(workspace, "args.txt");
+    const markerPath = join(workspace, "done.txt");
     const commandPath = join(workspace, "wl-copy");
     const originalPath = process.env.PATH;
 
@@ -18,8 +18,9 @@ describe("copyToClipboard", () => {
       commandPath,
       `#!/usr/bin/env bash
 set -euo pipefail
-printf '%s\\n' "$*" > ${shellQuote(argsPath)}
 cat > ${shellQuote(dataPath)}
+sleep 0.1
+printf 'done\\n' > ${shellQuote(markerPath)}
 `,
       { mode: 0o755 }
     );
@@ -29,8 +30,8 @@ cat > ${shellQuote(dataPath)}
     try {
       await copyToClipboard("wl-copy", "hello clipboard");
 
-      assert.equal(await readFile(argsPath, "utf8"), "--foreground\n");
       assert.equal(await readFile(dataPath, "utf8"), "hello clipboard");
+      assert.equal(await readFile(markerPath, "utf8"), "done\n");
     } finally {
       process.env.PATH = originalPath;
       await rm(workspace, { recursive: true, force: true });
