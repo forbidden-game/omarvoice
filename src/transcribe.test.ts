@@ -136,7 +136,22 @@ describe("transcribeFile retry behavior", () => {
 
     try {
       const text = await transcribeFile(filePath, config);
-      assert.equal(text, "这个结果真不错。Please ship it.");
+      assert.equal(text, "这个结果真不错。please ship it.");
+    } finally {
+      await rm(dirPath, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes uppercase latin letters to lowercase", async () => {
+    const { dirPath, filePath } = await createTempAudioFile();
+    const config = createTestConfig();
+
+    globalThis.fetch = (async () =>
+      createCompletionResponse("Please Ship VERSION TWO ASAP! URL 是 HTTPS://EXAMPLE.COM")) as MockFetch;
+
+    try {
+      const text = await transcribeFile(filePath, config);
+      assert.equal(text, "please ship version two asap. url 是 https://example.com");
     } finally {
       await rm(dirPath, { recursive: true, force: true });
     }

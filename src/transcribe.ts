@@ -312,7 +312,10 @@ function normalizeTranscriptText(text: string): string | null {
   }
 
   const numericNormalized = normalizeNumericText(sanitized);
-  return numericNormalized.length > 0 ? numericNormalized : sanitized;
+  const caseNormalized = normalizeLetterCase(
+    numericNormalized.length > 0 ? numericNormalized : sanitized
+  );
+  return caseNormalized.length > 0 ? caseNormalized : null;
 }
 
 function sanitizeTranscriptText(text: string): string {
@@ -330,6 +333,10 @@ function sanitizeTranscriptText(text: string): string {
 
 function normalizeNumericText(text: string): string {
   return normalizeStandaloneDecimals(normalizePercentages(normalizeVersions(text)));
+}
+
+function normalizeLetterCase(text: string): string {
+  return text.toLowerCase();
 }
 
 function normalizeVersions(text: string): string {
