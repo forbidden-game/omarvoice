@@ -53,6 +53,8 @@ describe("loadConfig macOS defaults", () => {
       "16000",
       "-ac",
       "1",
+      "-flush_packets",
+      "1",
       "-y"
     ]);
     assert.equal(config.startSoundCommand, "afplay");
@@ -61,7 +63,7 @@ describe("loadConfig macOS defaults", () => {
     assert.deepEqual(config.stopSoundArgs, ["-v", "0.35", "/System/Library/Sounds/Glass.aiff"]);
     assert.equal(config.clipboardCommand, "pbcopy");
     assert.equal(config.notifyCommand, "osascript");
-    assert.equal(config.socketPath, "/tmp/omarvoice.sock");
+    assert.equal(config.socketPath, "/tmp/ohmyvoice.sock");
   });
 
   it("returns Linux defaults when platform is linux", () => {

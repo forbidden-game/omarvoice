@@ -110,7 +110,7 @@ function buildCommandExitError(command: string, code: number | null, stderr: str
     trimmedStderr.includes("Failed to connect to a Wayland server")
   ) {
     message +=
-      ". wl-copy requires an active Wayland session; start omarvoice.service from graphical-session.target or set VOICE_CLIPBOARD_COMMAND to a clipboard tool that matches the current session.";
+      ". wl-copy requires an active Wayland session; start ohmyvoice.service from graphical-session.target or set VOICE_CLIPBOARD_COMMAND to a clipboard tool that matches the current session.";
   }
 
   return new Error(message);

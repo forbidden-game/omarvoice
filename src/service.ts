@@ -75,7 +75,7 @@ export class VoiceService {
 
     await mkdir(this.config.tmpDir, { recursive: true });
 
-    const filename = `omarvoice-${Date.now()}.wav`;
+    const filename = `ohmyvoice-${Date.now()}.wav`;
     const filePath = join(this.config.tmpDir, filename);
     const useStdinStop = this.config.recordCommand === "ffmpeg";
     const recorder = spawn(this.config.recordCommand, [...this.config.recordArgs, filePath], {

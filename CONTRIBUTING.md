@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to `omarvoice`.
+Thanks for contributing to `ohmyvoice`.
 
 ## Development Setup
 

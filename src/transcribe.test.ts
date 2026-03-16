@@ -263,7 +263,7 @@ function createTestConfig() {
 }
 
 async function createTempAudioFile(): Promise<{ dirPath: string; filePath: string }> {
-  const dirPath = await mkdtemp(join(tmpdir(), "omarvoice-transcribe-test-"));
+  const dirPath = await mkdtemp(join(tmpdir(), "ohmyvoice-transcribe-test-"));
   const filePath = join(dirPath, "sample.wav");
   await writeFile(filePath, Buffer.from([82, 73, 70, 70]));
   return { dirPath, filePath };

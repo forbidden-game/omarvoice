@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.omarvoice.daemon</string>
+  <string>com.ohmyvoice.daemon</string>
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
@@ -21,8 +21,8 @@
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/tmp/omarvoice.stdout.log</string>
+  <string>/tmp/ohmyvoice.stdout.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/omarvoice.stderr.log</string>
+  <string>/tmp/ohmyvoice.stderr.log</string>
 </dict>
 </plist>

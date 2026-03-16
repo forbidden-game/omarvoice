@@ -8,7 +8,7 @@ import { copyToClipboard, sendNotification } from "./system.js";
 
 describe("copyToClipboard", () => {
   it("does not block on wl-copy staying alive to serve the clipboard", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "omarvoice-system-"));
+    const workspace = await mkdtemp(join(tmpdir(), "ohmyvoice-system-"));
     const dataPath = join(workspace, "stdin.txt");
     const markerPath = join(workspace, "started.txt");
     const commandPath = join(workspace, "wl-copy");
@@ -42,7 +42,7 @@ sleep 5
   });
 
   it("adds a focused hint when wl-copy cannot reach Wayland", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "omarvoice-system-"));
+    const workspace = await mkdtemp(join(tmpdir(), "ohmyvoice-system-"));
     const commandPath = join(workspace, "wl-copy");
     const originalPath = process.env.PATH;
 
@@ -76,7 +76,7 @@ function shellQuote(value: string): string {
 
 describe("sendNotification", () => {
   it("uses on run argv for osascript command", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "omarvoice-notify-"));
+    const workspace = await mkdtemp(join(tmpdir(), "ohmyvoice-notify-"));
     const argsPath = join(workspace, "args.json");
     const commandPath = join(workspace, "osascript");
 
@@ -109,7 +109,7 @@ printf '%s\\n' "$@" > ${shellQuote(argsPath)}
   });
 
   it("uses positional args for notify-send", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "omarvoice-notify-"));
+    const workspace = await mkdtemp(join(tmpdir(), "ohmyvoice-notify-"));
     const argsPath = join(workspace, "args.json");
     const commandPath = join(workspace, "notify-send");
 

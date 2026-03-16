@@ -56,7 +56,7 @@ export function loadConfig(
 ): AppConfig {
   const isDarwin = platform === "darwin";
   const runtimeDir = env.XDG_RUNTIME_DIR ?? "/tmp";
-  const defaultSocketPath = isDarwin ? "/tmp/omarvoice.sock" : join(runtimeDir, "omarvoice.sock");
+  const defaultSocketPath = isDarwin ? "/tmp/ohmyvoice.sock" : join(runtimeDir, "ohmyvoice.sock");
 
   return {
     socketPath: env.VOICE_SOCKET_PATH ?? defaultSocketPath,
