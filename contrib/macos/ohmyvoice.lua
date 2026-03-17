@@ -23,27 +23,32 @@ local cliScript    = projectDir .. "/dist/cli.js"
 ----------------------------------------------------------------
 -- Daemon process (managed by Hammerspoon)
 ----------------------------------------------------------------
-local daemonTask
+
+-- Clean up any leftover daemon from a previous Hammerspoon reload.
+-- Reload does NOT auto-terminate child processes — without this the
+-- old daemon holds the socket and the new one silently fails to start.
+local socketPath = "/tmp/ohmyvoice.sock"
+hs.execute("pkill -f 'node.*ohmyvoice/dist/daemon.js' 2>/dev/null; rm -f " .. socketPath)
+hs.timer.usleep(300000) -- 300 ms for process cleanup
+
+local daemonEnv = {
+  PATH           = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+  LANG           = "en_US.UTF-8",
+  HOME           = os.getenv("HOME"),
+  VOICE_ENDPOINT = "http://127.0.0.1:8000/v1/chat/completions",
+  -- VOICE_RECORD_ARGS      = "-f avfoundation -i :1 -ar 16000 -ac 1 -c:a libopus -application voip -flush_packets 1 -y",
+  -- VOICE_START_SOUND_ARGS = "-v 0.6 /System/Library/Sounds/Funk.aiff",
+  -- VOICE_STOP_SOUND_ARGS  = "-v 0.6 /System/Library/Sounds/Glass.aiff",
+}
 
 local function startDaemon()
-  daemonTask = hs.task.new(nodeBin, function(code, _, stderr)
+  local task = hs.task.new(nodeBin, function(code, _, stderr)
     hs.printf("ohmyvoice daemon exited: code=%d stderr=%s", code, stderr)
     hs.timer.doAfter(2, startDaemon)
   end, {daemonScript})
-
-  daemonTask:setEnvironment({
-    PATH           = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
-    LANG           = "en_US.UTF-8",
-    HOME           = os.getenv("HOME"),
-    VOICE_ENDPOINT = "http://127.0.0.1:8000/v1/chat/completions",
-    -- VOICE_MODEL       = "Qwen/Qwen3-ASR-1.7B",
-    -- VOICE_RECORD_ARGS = "-f avfoundation -i :1 -ac 1 -flush_packets 1 -y",
-    -- VOICE_START_SOUND_ARGS = "-v 0.6 /System/Library/Sounds/Funk.aiff",
-    -- VOICE_STOP_SOUND_ARGS  = "-v 0.6 /System/Library/Sounds/Glass.aiff",
-  })
-
-  daemonTask:start()
-  hs.printf("ohmyvoice daemon started, pid=%s", tostring(daemonTask:pid()))
+  task:setEnvironment(daemonEnv)
+  task:start()
+  hs.printf("ohmyvoice daemon started, pid=%s", tostring(task:pid()))
 end
 
 startDaemon()
