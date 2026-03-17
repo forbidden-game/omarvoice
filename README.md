@@ -13,9 +13,16 @@
   <strong>macOS</strong> · <strong>Linux (Wayland / Hyprland)</strong>
 </p>
 
-> **ohmyvoice 是一个纯本地的语音输入客户端。** 它负责录音、热键管理和剪贴板集成，语音识别（ASR）由你自己部署的模型（如 Qwen3-ASR、Whisper）或第三方 API 提供。只要后端兼容 OpenAI Chat Completions 接口，即可接入。
+> **ohmyvoice 是一个完全本地化的语音输入工具。** 内置 SenseVoice 后端，开箱即用——录音、识别、剪贴板集成全部在本机完成，音频数据不出本地。也支持接入自建模型（Qwen3-ASR、Whisper 等）或任何兼容 OpenAI Chat Completions 接口的第三方 API。
 >
-> **ohmyvoice is a local voice input client.** It handles recording, hotkeys, and clipboard — speech recognition is provided by your own self-hosted model (Qwen3-ASR, Whisper, etc.) or any third-party API. Any OpenAI-compatible Chat Completions endpoint works.
+> **ohmyvoice is a fully local voice input tool.** Ships with a bundled SenseVoice backend — recording, recognition, and clipboard integration all happen on your machine. Audio never leaves your device. You can also plug in your own ASR model or any OpenAI-compatible endpoint.
+
+### Why Local?
+
+- **Privacy first** — your voice stays on your machine. No audio uploaded to third-party servers.
+- **Ownership & traceability** — all data is under your control, auditable and deletable at any time.
+- **Lightweight** — SenseVoice-Small uses ~200 MB memory, processes 10 seconds of speech in ~70 ms.
+- **Offline-capable** — works without internet once the model is downloaded.
 
 ---
 
@@ -29,7 +36,7 @@ https://github.com/user-attachments/assets/80bbe068-f270-4904-91ab-25bc9aeefd01
 
 1. **Hold** the hotkey → recording starts (you hear a prompt sound)
 2. **Speak** freely
-3. **Release** the hotkey → audio is sent to an OpenAI-compatible ASR backend
+3. **Release** the hotkey → audio is recognized locally by SenseVoice (or any OpenAI-compatible backend)
 4. **Transcript** is copied to clipboard + desktop notification
 
 That's it. No GUI, no electron app — just a lightweight daemon and a CLI.
@@ -50,19 +57,30 @@ That's it. No GUI, no electron app — just a lightweight daemon and a CLI.
 **1. Install dependencies**
 
 ```bash
-brew install node ffmpeg
+brew install node ffmpeg python3
 brew install --cask hammerspoon
+pip3 install sherpa-onnx fastapi uvicorn numpy
 ```
 
-**2. Build**
+**2. Build & set up SenseVoice backend**
 
 ```bash
 git clone https://github.com/anthropics/ohmyvoice.git
 cd ohmyvoice
 npm ci && npm run build
+
+# Download SenseVoice-Small model (~228 MB, one-time)
+bash contrib/sensevoice-backend/download_model.sh
 ```
 
-**3. Set up Hammerspoon**
+**3. Start the local ASR backend**
+
+```bash
+python3 contrib/sensevoice-backend/server.py
+# Listening on http://0.0.0.0:8000
+```
+
+**4. Set up Hammerspoon**
 
 ```bash
 cp contrib/macos/ohmyvoice.lua ~/.hammerspoon/init.lua
@@ -71,13 +89,13 @@ cp contrib/macos/ohmyvoice.lua ~/.hammerspoon/init.lua
 Edit `~/.hammerspoon/init.lua`:
 
 - Set `projectDir` to your checkout path (e.g. `os.getenv("HOME") .. "/ohmyvoice"`)
-- Set `VOICE_ENDPOINT` to your ASR backend URL
+- `VOICE_ENDPOINT` defaults to `http://127.0.0.1:8000/v1/chat/completions` (local SenseVoice)
 
 Then grant **Accessibility** to Hammerspoon: System Settings → Privacy & Security → Accessibility.
 
 Reload config: click the Hammerspoon menubar icon → **Reload Config**.
 
-**4. Use it**
+**5. Use it**
 
 Hold **Right Command** to record, release to stop. Transcript appears in your clipboard.
 
@@ -266,7 +284,8 @@ All settings are environment variables. Defaults auto-detect your platform — m
 | `VOICE_SOCKET_PATH`         | `$XDG_RUNTIME_DIR/ohmyvoice.sock`     | `/tmp/ohmyvoice.sock`                            |
 | `VOICE_TMP_DIR`             | `/tmp`                                | `/tmp`                                           |
 | `VOICE_RECORD_COMMAND`      | `pw-record`                           | `ffmpeg`                                         |
-| `VOICE_RECORD_ARGS`         | `--rate 16000 --channels 1`           | `-f avfoundation -i :default -ar 16000 -ac 1 -y` |
+| `VOICE_RECORD_FILE_EXT`     | `.wav`                                | `.ogg`                                           |
+| `VOICE_RECORD_ARGS`         | `--rate 16000 --channels 1`           | `-f avfoundation -i :default -ar 16000 -ac 1 -c:a libopus -application voip -y` |
 | `VOICE_START_SOUND_COMMAND` | `pw-play`                             | `afplay`                                         |
 | `VOICE_START_SOUND_ARGS`    | `--volume 0.35 /usr/.../bell.oga`     | `-v 0.35 /System/.../Tink.aiff`                  |
 | `VOICE_STOP_SOUND_COMMAND`  | `pw-play`                             | `afplay`                                         |
