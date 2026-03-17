@@ -7,6 +7,7 @@ export interface AppConfig {
   tmpDir: string;
   recordCommand: string;
   recordArgs: string[];
+  recordFileExtension: string;
   startSoundCommand: string;
   startSoundArgs: string[];
   stopSoundCommand: string;
@@ -43,6 +44,10 @@ const MACOS_RECORD_ARGS = [
   "16000",
   "-ac",
   "1",
+  "-c:a",
+  "libopus",
+  "-application",
+  "voip",
   "-flush_packets",
   "1",
   "-y"
@@ -66,6 +71,7 @@ export function loadConfig(
     recordCommand: env.VOICE_RECORD_COMMAND ?? (isDarwin ? "ffmpeg" : "pw-record"),
     recordArgs:
       parseArgs(env.VOICE_RECORD_ARGS) ?? (isDarwin ? MACOS_RECORD_ARGS : LINUX_RECORD_ARGS),
+    recordFileExtension: normalizeOptional(env.VOICE_RECORD_FILE_EXT) ?? (isDarwin ? ".ogg" : ".wav"),
     startSoundCommand: env.VOICE_START_SOUND_COMMAND ?? (isDarwin ? "afplay" : "pw-play"),
     startSoundArgs:
       parseArgs(env.VOICE_START_SOUND_ARGS) ??

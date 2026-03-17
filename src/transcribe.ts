@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { extname } from "node:path";
 
 import type { AppConfig } from "./config.js";
 
@@ -87,7 +88,7 @@ class TranscribeError extends Error {
 
 export async function transcribeFile(filePath: string, config: AppConfig): Promise<string> {
   const audioData = await readFile(filePath);
-  const payload = buildPayload(audioData, config);
+  const payload = buildPayload(audioData, filePath, config);
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_TRANSCRIBE_ATTEMPTS; attempt += 1) {
@@ -183,8 +184,25 @@ function buildHeaders(config: AppConfig): HeadersInit {
   return headers;
 }
 
-function buildPayload(audioData: Buffer, config: AppConfig): Record<string, unknown> {
-  const audioDataUrl = `data:audio/wav;base64,${audioData.toString("base64")}`;
+function audioMimeType(filePath: string): string {
+  const mimeTypes: Record<string, string> = {
+    ".ogg": "audio/ogg",
+    ".opus": "audio/opus",
+    ".flac": "audio/flac",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav"
+  };
+
+  return mimeTypes[extname(filePath).toLowerCase()] ?? "audio/wav";
+}
+
+function buildPayload(
+  audioData: Buffer,
+  filePath: string,
+  config: AppConfig
+): Record<string, unknown> {
+  const mime = audioMimeType(filePath);
+  const audioDataUrl = `data:${mime};base64,${audioData.toString("base64")}`;
   const prompt = buildPrompt(config.prompt, config.language);
 
   return {

@@ -53,10 +53,15 @@ describe("loadConfig macOS defaults", () => {
       "16000",
       "-ac",
       "1",
+      "-c:a",
+      "libopus",
+      "-application",
+      "voip",
       "-flush_packets",
       "1",
       "-y"
     ]);
+    assert.equal(config.recordFileExtension, ".ogg");
     assert.equal(config.startSoundCommand, "afplay");
     assert.deepEqual(config.startSoundArgs, ["-v", "0.35", "/System/Library/Sounds/Tink.aiff"]);
     assert.equal(config.stopSoundCommand, "afplay");
@@ -71,6 +76,7 @@ describe("loadConfig macOS defaults", () => {
 
     assert.equal(config.recordCommand, "pw-record");
     assert.deepEqual(config.recordArgs, ["--rate", "16000", "--channels", "1"]);
+    assert.equal(config.recordFileExtension, ".wav");
     assert.equal(config.startSoundCommand, "pw-play");
     assert.equal(config.stopSoundCommand, "pw-play");
     assert.equal(config.clipboardCommand, "wl-copy");
