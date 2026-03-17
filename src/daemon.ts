@@ -4,17 +4,22 @@ import net from "node:net";
 import { mkdir, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import { BackendManager } from "./backend-manager.js";
 import { loadConfig } from "./config.js";
 import type { VoiceAction, VoiceRequest, VoiceResponse } from "./ipc.js";
 import { VoiceService } from "./service.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  const backend = new BackendManager(config);
   const service = new VoiceService(config);
   const server = net.createServer();
 
   await mkdir(dirname(config.socketPath), { recursive: true });
   await rm(config.socketPath, { force: true });
+
+  // Start managed backend (no-op in external mode).
+  await backend.start();
 
   server.on("connection", (socket) => {
     let buffer = "";
@@ -56,6 +61,7 @@ async function main(): Promise<void> {
 
     server.close();
     await service.shutdown();
+    await backend.stop();
     await rm(config.socketPath, { force: true });
 
     process.exit(0);

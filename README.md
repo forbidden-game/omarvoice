@@ -59,45 +59,28 @@ That's it. No GUI, no electron app — just a lightweight daemon and a CLI.
 ```bash
 brew install node ffmpeg python3
 brew install --cask hammerspoon
-pip3 install sherpa-onnx fastapi uvicorn numpy
 ```
 
-**2. Build & set up SenseVoice backend**
+**2. One-command setup**
 
 ```bash
 git clone https://github.com/anthropics/ohmyvoice.git
 cd ohmyvoice
-npm ci && npm run build
-
-# Download SenseVoice-Small model (~228 MB, one-time)
-bash contrib/sensevoice-backend/download_model.sh
+./setup-macos.sh
 ```
 
-**3. Start the local ASR backend**
+This builds the project, creates a local Python venv with SenseVoice dependencies, downloads the model (~228 MB), installs the Hammerspoon integration, and triggers the microphone permission prompt.
 
-```bash
-python3 contrib/sensevoice-backend/server.py
-# Listening on http://0.0.0.0:8000
-```
+**3. Grant permissions**
 
-**4. Set up Hammerspoon**
+- **Accessibility**: System Settings → Privacy & Security → Accessibility → Hammerspoon
+- **Microphone**: System Settings → Privacy & Security → Microphone → Hammerspoon
 
-```bash
-cp contrib/macos/ohmyvoice.lua ~/.hammerspoon/init.lua
-```
-
-Edit `~/.hammerspoon/init.lua`:
-
-- Set `projectDir` to your checkout path (e.g. `os.getenv("HOME") .. "/ohmyvoice"`)
-- `VOICE_ENDPOINT` defaults to `http://127.0.0.1:8000/v1/chat/completions` (local SenseVoice)
-
-Then grant **Accessibility** to Hammerspoon: System Settings → Privacy & Security → Accessibility.
-
-Reload config: click the Hammerspoon menubar icon → **Reload Config**.
-
-**5. Use it**
+**4. Use it**
 
 Hold **Right Command** to record, release to stop. Transcript appears in your clipboard.
+
+The SenseVoice backend starts and stops automatically with the daemon — no need to run `server.py` manually.
 
 > **Why Hammerspoon?** macOS LaunchAgents lack the AudioSession context that ffmpeg's AVFoundation needs. Hammerspoon is a GUI app — processes it spawns get proper audio access. Without it you get sped-up, noisy recordings. See [contrib/macos/SETUP.md](contrib/macos/SETUP.md) for details.
 
@@ -264,11 +247,12 @@ Notes:
 
 ## Configuration
 
-All settings are environment variables. Defaults auto-detect your platform — most users need only `VOICE_ENDPOINT`.
+All settings are environment variables. Defaults auto-detect your platform — most users need zero configuration.
 
 | Variable                   | Description                             | Default               |
 | -------------------------- | --------------------------------------- | --------------------- |
-| `VOICE_ENDPOINT`           | OpenAI-compatible chat completions URL  | _(required)_          |
+| `VOICE_ENDPOINT`           | OpenAI-compatible chat completions URL  | `http://127.0.0.1:8000/v1/chat/completions` |
+| `VOICE_BACKEND`            | `managed` (auto-start SenseVoice) or `external` | `managed` when using bundled endpoint, otherwise `external` |
 | `VOICE_API_KEY`            | Bearer token (if backend requires auth) | _(none)_              |
 | `VOICE_MODEL`              | Model name in request body              | `Qwen/Qwen3-ASR-1.7B` |
 | `VOICE_LANGUAGE`           | Language hint appended to prompt        | _(none)_              |

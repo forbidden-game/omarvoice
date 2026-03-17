@@ -6,7 +6,7 @@ Accepts the same multimodal request format that ohmyvoice sends
 Usage:
     pip install sherpa-onnx fastapi uvicorn
     # Download model (see README or run download_model.sh)
-    python server.py                       # default: 0.0.0.0:8000
+    python server.py                       # default: 127.0.0.1:8000
     python server.py --port 9000           # custom port
     SENSEVOICE_MODEL_DIR=./my-model python server.py
 """
@@ -31,7 +31,7 @@ from fastapi.responses import JSONResponse
 # ---------------------------------------------------------------------------
 
 DEFAULT_MODEL_DIR = Path(__file__).parent / "model"
-DEFAULT_HOST = "0.0.0.0"
+DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 DEFAULT_NUM_THREADS = 4
 

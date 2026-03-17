@@ -93,3 +93,63 @@ describe("loadConfig macOS defaults", () => {
     assert.equal(config.clipboardCommand, "xclip");
   });
 });
+
+describe("loadConfig backendMode", () => {
+  it("defaults to managed on macOS with default endpoint", () => {
+    const config = loadConfig({}, "darwin");
+    assert.equal(config.backendMode, "managed");
+  });
+
+  it("defaults to external on Linux even with default endpoint", () => {
+    const config = loadConfig({}, "linux");
+    assert.equal(config.backendMode, "external");
+  });
+
+  it("defaults to external on macOS when endpoint port differs", () => {
+    const config = loadConfig(
+      { VOICE_ENDPOINT: "http://127.0.0.1:8787/v1/chat/completions" },
+      "darwin"
+    );
+    assert.equal(config.backendMode, "external");
+  });
+
+  it("defaults to external on macOS with SSH tunnel endpoint", () => {
+    const config = loadConfig(
+      { VOICE_ENDPOINT: "http://127.0.0.1:18000/v1/chat/completions" },
+      "darwin"
+    );
+    assert.equal(config.backendMode, "external");
+  });
+
+  it("defaults to external on macOS with remote endpoint", () => {
+    const config = loadConfig(
+      { VOICE_ENDPOINT: "https://api.example.com/v1/chat/completions" },
+      "darwin"
+    );
+    assert.equal(config.backendMode, "external");
+  });
+
+  it("defaults to external on macOS with IPv6 localhost endpoint", () => {
+    const config = loadConfig(
+      { VOICE_ENDPOINT: "http://[::1]:8000/v1/chat/completions" },
+      "darwin"
+    );
+    assert.equal(config.backendMode, "external");
+  });
+
+  it("explicit VOICE_BACKEND=managed overrides any endpoint", () => {
+    const config = loadConfig(
+      {
+        VOICE_BACKEND: "managed",
+        VOICE_ENDPOINT: "https://api.example.com/v1/chat/completions"
+      },
+      "darwin"
+    );
+    assert.equal(config.backendMode, "managed");
+  });
+
+  it("explicit VOICE_BACKEND=external overrides default endpoint on macOS", () => {
+    const config = loadConfig({ VOICE_BACKEND: "external" }, "darwin");
+    assert.equal(config.backendMode, "external");
+  });
+});

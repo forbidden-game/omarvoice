@@ -1,9 +1,15 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export type BackendMode = "managed" | "external";
 
 export interface AppConfig {
   socketPath: string;
   endpoint: string;
   apiKey: string | undefined;
+  backendMode: BackendMode;
+  backendPidFile: string;
+  backendScript: string;
   tmpDir: string;
   recordCommand: string;
   recordArgs: string[];
@@ -62,16 +68,25 @@ export function loadConfig(
   const isDarwin = platform === "darwin";
   const runtimeDir = env.XDG_RUNTIME_DIR ?? "/tmp";
   const defaultSocketPath = isDarwin ? "/tmp/ohmyvoice.sock" : join(runtimeDir, "ohmyvoice.sock");
+  const srcDir = dirname(fileURLToPath(import.meta.url));
+  const projectDir = dirname(srcDir);
+
+  const endpoint = env.VOICE_ENDPOINT ?? DEFAULT_ENDPOINT;
 
   return {
     socketPath: env.VOICE_SOCKET_PATH ?? defaultSocketPath,
-    endpoint: env.VOICE_ENDPOINT ?? "http://127.0.0.1:8000/v1/chat/completions",
+    endpoint,
     apiKey: normalizeOptional(env.VOICE_API_KEY),
+    backendMode: parseBackendMode(env.VOICE_BACKEND, isDarwin, endpoint),
+    backendPidFile: env.VOICE_BACKEND_PID_FILE ?? "/tmp/ohmyvoice-backend.pid",
+    backendScript:
+      env.VOICE_BACKEND_SCRIPT ?? join(projectDir, "contrib", "sensevoice-backend", "server.py"),
     tmpDir: env.VOICE_TMP_DIR ?? "/tmp",
     recordCommand: env.VOICE_RECORD_COMMAND ?? (isDarwin ? "ffmpeg" : "pw-record"),
     recordArgs:
       parseArgs(env.VOICE_RECORD_ARGS) ?? (isDarwin ? MACOS_RECORD_ARGS : LINUX_RECORD_ARGS),
-    recordFileExtension: normalizeOptional(env.VOICE_RECORD_FILE_EXT) ?? (isDarwin ? ".ogg" : ".wav"),
+    recordFileExtension:
+      normalizeOptional(env.VOICE_RECORD_FILE_EXT) ?? (isDarwin ? ".ogg" : ".wav"),
     startSoundCommand: env.VOICE_START_SOUND_COMMAND ?? (isDarwin ? "afplay" : "pw-play"),
     startSoundArgs:
       parseArgs(env.VOICE_START_SOUND_ARGS) ??
@@ -110,6 +125,30 @@ function parseArgs(raw: string | undefined): string[] | undefined {
     .split(/\s+/)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
+}
+
+const DEFAULT_ENDPOINT = "http://127.0.0.1:8000/v1/chat/completions";
+
+function parseBackendMode(
+  raw: string | undefined,
+  isDarwin: boolean,
+  endpoint: string
+): BackendMode {
+  // Explicit setting always wins.
+  if (raw === "managed" || raw === "external") {
+    return raw;
+  }
+
+  // Only default to managed on macOS when the endpoint is exactly the bundled
+  // SenseVoice default.  Any other endpoint — different port, different host,
+  // mock backend, SSH tunnel — defaults to external.  This avoids spawning
+  // server.py when the user has their own backend, without requiring them to
+  // discover VOICE_BACKEND=external.
+  if (isDarwin && endpoint === DEFAULT_ENDPOINT) {
+    return "managed";
+  }
+
+  return "external";
 }
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {

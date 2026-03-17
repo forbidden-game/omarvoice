@@ -8,3 +8,6 @@ dist
 
 # SenseVoice model files (download via contrib/sensevoice-backend/download_model.sh)
 contrib/sensevoice-backend/model/
+
+# Python venv (created by setup-macos.sh)
+contrib/sensevoice-backend/.venv/

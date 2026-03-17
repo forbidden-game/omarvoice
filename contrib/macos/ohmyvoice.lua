@@ -24,10 +24,37 @@ local cliScript    = projectDir .. "/dist/cli.js"
 -- Daemon process (managed by Hammerspoon)
 ----------------------------------------------------------------
 
--- Clean up any leftover daemon from a previous Hammerspoon reload.
+-- Clean up any leftover daemon and backend from a previous Hammerspoon reload.
 -- Reload does NOT auto-terminate child processes — without this the
 -- old daemon holds the socket and the new one silently fails to start.
 local socketPath = "/tmp/ohmyvoice.sock"
+local backendPidFile = "/tmp/ohmyvoice-backend.pid"
+
+local backendScript = projectDir .. "/contrib/sensevoice-backend/server.py"
+
+-- Kill stale backend by PID file, but only after verifying the PID still
+-- belongs to our server.py (guards against PID reuse after a crash).
+local function killByPidFile(pidFile, scriptPath)
+  local f = io.open(pidFile, "r")
+  if not f then return end
+  local pid = f:read("*a"):match("^%s*(%d+)%s*$")
+  f:close()
+  if not pid then
+    os.remove(pidFile)
+    return
+  end
+  -- Verify ownership: check that the process command line contains our script path.
+  local cmd = hs.execute("ps -p " .. pid .. " -o command= 2>/dev/null")
+  if not cmd or not cmd:find(scriptPath, 1, true) then
+    hs.printf("ohmyvoice: stale pid %s is not our backend, skipping kill", pid)
+    os.remove(pidFile)
+    return
+  end
+  hs.execute("kill -TERM -" .. pid .. " 2>/dev/null; kill -TERM " .. pid .. " 2>/dev/null")
+  os.remove(pidFile)
+end
+
+killByPidFile(backendPidFile, backendScript)
 hs.execute("pkill -f 'node.*ohmyvoice/dist/daemon.js' 2>/dev/null; rm -f " .. socketPath)
 hs.timer.usleep(300000) -- 300 ms for process cleanup
 

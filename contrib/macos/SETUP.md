@@ -1,34 +1,59 @@
 # macOS Setup Guide
 
-## Prerequisites
+## Quick Start
 
 ```bash
-brew install node ffmpeg
+brew install node ffmpeg python3
+brew install --cask hammerspoon
+
+git clone https://github.com/anthropics/ohmyvoice.git
+cd ohmyvoice
+./setup-macos.sh
+```
+
+The setup script handles building, Python venv, model download, and Hammerspoon integration. Grant **Accessibility** and **Microphone** to Hammerspoon when prompted.
+
+## Manual Setup
+
+If you prefer to set things up manually:
+
+### Prerequisites
+
+```bash
+brew install node ffmpeg python3
 brew install --cask hammerspoon
 ```
 
-Grant **Accessibility** to Hammerspoon: System Settings → Privacy & Security → Accessibility.
-
-## Build
+### Build
 
 ```bash
 cd /path/to/ohmyvoice
 npm ci && npm run build
 ```
 
-## Configure Hammerspoon
-
-Copy the example config into Hammerspoon:
+### Python Backend
 
 ```bash
-cp contrib/macos/ohmyvoice.lua ~/.hammerspoon/init.lua
+python3 -m venv contrib/sensevoice-backend/.venv
+contrib/sensevoice-backend/.venv/bin/pip3 install -r contrib/sensevoice-backend/requirements.txt
+bash contrib/sensevoice-backend/download_model.sh
 ```
 
-Edit `~/.hammerspoon/init.lua`:
+The daemon starts the backend automatically when using the default bundled endpoint (`VOICE_BACKEND=managed`). If you set a custom `VOICE_ENDPOINT`, the daemon defaults to `external` mode — set `VOICE_BACKEND=managed` explicitly if you still want auto-management, or start `server.py` yourself.
+
+### Configure Hammerspoon
+
+Run the installer or copy manually:
+
+```bash
+bash contrib/macos/install.sh
+# or: cp contrib/macos/ohmyvoice.lua ~/.hammerspoon/init.lua
+```
+
+If copying manually, edit `~/.hammerspoon/init.lua`:
 
 1. Set `projectDir` to your ohmyvoice checkout path.
-2. Set `VOICE_ENDPOINT` to your ASR backend URL.
-3. Uncomment and adjust optional env vars as needed (model, audio device, sounds).
+2. Adjust optional env vars as needed (model, audio device, sounds).
 
 Reload: menubar Hammerspoon icon → **Reload Config**.
 
@@ -93,5 +118,5 @@ node dist/cli.js status
 - **No sound / sped-up audio**: Daemon must be launched from Hammerspoon, not LaunchAgent. Check audio device index.
 - **Clipboard garbled**: Ensure `LANG=en_US.UTF-8` is set in daemon environment.
 - **Hotkey not working**: Check Accessibility permission for Hammerspoon. Reload config after edits.
-- **Microphone permission**: Run the daemon once from an interactive terminal first to trigger the macOS permission prompt.
+- **Microphone permission**: Run `./setup-macos.sh` (which triggers the prompt) or run the daemon once from an interactive terminal.
 - **ffmpeg not found**: Ensure `PATH` includes `/opt/homebrew/bin` in the daemon environment.
