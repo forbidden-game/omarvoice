@@ -53,7 +53,7 @@ startDaemon()
 ----------------------------------------------------------------
 local rightCmdDown = false
 
-local voiceTap = hs.eventtap.new(
+voiceTap = hs.eventtap.new(
   {hs.eventtap.event.types.flagsChanged},
   function(event)
     if event:getKeyCode() ~= 54 then return false end
@@ -72,3 +72,13 @@ local voiceTap = hs.eventtap.new(
   end
 )
 voiceTap:start()
+
+-- Watchdog: macOS may silently disable event taps (e.g. after sleep,
+-- Secure Input, or security audit).  Re-enable automatically.
+hs.timer.doEvery(5, function()
+  if not voiceTap:isEnabled() then
+    hs.printf("ohmyvoice: event tap was disabled, re-enabling")
+    voiceTap:stop()
+    voiceTap:start()
+  end
+end)
