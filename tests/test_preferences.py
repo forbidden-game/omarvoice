@@ -59,3 +59,33 @@ def test_tab_switching(mock_app):
     for tab in ["audio", "recognition", "about", "general"]:
         pw._switch_tab(tab)
         assert pw._current_tab == tab
+
+
+def test_general_tab_has_hotkey_display(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._hotkey_label is not None
+    # hotkey_display returns "⌥SPACE" (uppercase)
+    assert "SPACE" in pw._hotkey_label.stringValue()
+
+
+def test_general_tab_language_popup(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._language_popup is not None
+    # Default is "auto" → index 0 ("自动检测")
+    assert pw._language_popup.indexOfSelectedItem() == 0
+
+
+def test_general_tab_autostart_switch(mock_app):
+    from ohmyvoice.preferences import PreferencesWindow
+
+    pw = PreferencesWindow(mock_app)
+    pw._build()
+    assert pw._autostart_switch is not None
+    # Default is False → state 0
+    assert pw._autostart_switch.state() == 0
