@@ -163,7 +163,15 @@ macOS 本地语音转文字工具。按住快捷键说话，松开后经 Qwen3-A
 - 影响 Qwen3-ASR 的语言提示参数
 - 自动检测适合中英混合场景（默认）
 
-#### F10: 模型管理
+#### F10: 完成通知
+
+- 设置窗口中可开关（默认关闭）
+- 开启后，每次转写完成时发送 macOS 系统通知
+- 通知内容：转写结果文字预览（截取前 80 字符）
+- 点击通知可重新复制该条结果到剪贴板
+- 通过 `PyObjC` (UserNotifications / NSUserNotificationCenter) 实现
+
+#### F11: 模型管理
 
 - 设置窗口 → 模型 tab
 - 显示：模型名称、量化精度、文件大小、内存占用
@@ -255,7 +263,7 @@ macOS 本地语音转文字工具。按住快捷键说话，松开后经 Qwen3-A
   },
   "language": "auto",
   "autostart": false,
-  "notification_on_complete": false,  // 预留，V1 暂不实现独立通知功能
+  "notification_on_complete": false,
   "history_max_entries": 1000
 }
 ```
