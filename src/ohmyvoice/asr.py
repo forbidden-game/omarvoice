@@ -14,9 +14,18 @@ class ASREngine:
         self._model_id = model_id
         self._session = None
 
-    def load(self) -> None:
-        from mlx_qwen3_asr import Session
-        self._session = Session(model=self._model_id)
+    def load(self, quantize_bits: int = 4) -> None:
+        from mlx_qwen3_asr import Session, load_model
+        from mlx_qwen3_asr.convert import quantize_model
+        import mlx.core as mx
+
+        model, config = load_model(self._model_id)
+        if quantize_bits in (4, 8):
+            model = quantize_model(model, bits=quantize_bits)
+            mx.eval(model.parameters())
+        # Limit MLX memory cache to prevent unbounded growth
+        mx.set_cache_limit(512 * 1024 * 1024)  # 512MB
+        self._session = Session(model=model)
 
     @property
     def is_loaded(self) -> bool:
