@@ -1,8 +1,23 @@
+import re
 import threading
 import time
 from pathlib import Path
 
 import rumps
+
+
+_FILLER_WORDS = r'(?:呃|嗯|啊|哦|额|唔|那个|就是说|然后吧)+'
+
+
+def _clean_text(text: str) -> str:
+    """Remove filler words and clean up punctuation artifacts."""
+    # Remove fillers optionally surrounded by punctuation
+    text = re.sub(rf'[，、。]*{_FILLER_WORDS}[，、。]*', '，', text)
+    # Collapse repeated punctuation
+    text = re.sub(r'[，、。]{2,}', '，', text)
+    # Strip leading/trailing punctuation
+    text = re.sub(r'^[，、。\s]+|[，、\s]+$', '', text)
+    return text.strip()
 
 from ohmyvoice.asr import ASREngine
 from ohmyvoice.audio_feedback import play_done, play_start
@@ -97,7 +112,7 @@ class OhMyVoiceApp(rumps.App):
         try:
             context = self._settings.get_active_prompt()
             result = self._engine.transcribe(audio, context=context)
-            text = result.text
+            text = _clean_text(result.text)
             if text:
                 copy_to_clipboard(text)
                 self._history.add(text, duration=result.duration_seconds)
