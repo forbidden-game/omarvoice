@@ -21,7 +21,7 @@ for cmd in curl tar; do
 done
 
 run_as_root() {
-  if [ "${EUID}" -eq 0 ]; then
+  if [ "$(id -u)" -eq 0 ]; then
     "$@"
   else
     sudo "$@"
@@ -96,24 +96,27 @@ install_dependencies() {
 }
 
 download_repo() {
-  local tmp_dir archive extracted_dir
+  local tmp_dir archive
   tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ohmyvoice-install.XXXXXX")"
   archive="${tmp_dir}/ohmyvoice.tar.gz"
   trap 'rm -rf "${tmp_dir}"' EXIT
 
   echo "[3/4] Downloading ohmyvoice (${REPO}@${REF})..."
   curl -fsSL "${ARCHIVE_URL}" -o "${archive}"
-  tar -xzf "${archive}" -C "${tmp_dir}"
+  mkdir -p "$(dirname "${INSTALL_DIR}")"
 
-  extracted_dir="$(find "${tmp_dir}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-  if [ -z "${extracted_dir}" ]; then
-    echo "Failed to unpack ${ARCHIVE_URL}" >&2
+  if [ -e "${INSTALL_DIR}" ] && [ ! -d "${INSTALL_DIR}" ]; then
+    echo "Install path exists but is not a directory: ${INSTALL_DIR}" >&2
     exit 1
   fi
 
-  rm -rf "${INSTALL_DIR}"
-  mkdir -p "$(dirname "${INSTALL_DIR}")"
-  mv "${extracted_dir}" "${INSTALL_DIR}"
+  if [ -d "${INSTALL_DIR}" ]; then
+    echo "  Preserving existing files in ${INSTALL_DIR}"
+  else
+    mkdir -p "${INSTALL_DIR}"
+  fi
+
+  tar -xzf "${archive}" --strip-components=1 -C "${INSTALL_DIR}"
 
   trap - EXIT
   rm -rf "${tmp_dir}"

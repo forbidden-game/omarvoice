@@ -35,6 +35,50 @@ activate_homebrew() {
   fi
 }
 
+node_major() {
+  local node_bin="${1:-}"
+  if [ -z "${node_bin}" ] || [ ! -x "${node_bin}" ]; then
+    echo 0
+    return
+  fi
+
+  "${node_bin}" -p "process.versions.node.split('.')[0]"
+}
+
+resolve_node_bin() {
+  local brew_prefix
+
+  activate_homebrew
+  if command -v brew >/dev/null 2>&1; then
+    brew_prefix="$(brew --prefix node 2>/dev/null || true)"
+    if [ -n "${brew_prefix}" ] && [ -x "${brew_prefix}/bin/node" ]; then
+      printf '%s\n' "${brew_prefix}/bin/node"
+      return 0
+    fi
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+
+  return 1
+}
+
+ensure_node_runtime() {
+  local node_bin
+  node_bin="$(resolve_node_bin || true)"
+
+  if [ -z "${node_bin}" ] || [ "$(node_major "${node_bin}")" -lt 20 ]; then
+    echo "Node.js 20+ is required, but a compatible runtime was not found." >&2
+    echo "Install Homebrew Node or put Node.js 20+ on PATH, then re-run this installer." >&2
+    exit 1
+  fi
+
+  export OHMYVOICE_NODE_BIN="${node_bin}"
+  export PATH="$(dirname "${node_bin}"):${PATH}"
+}
+
 ensure_homebrew() {
   activate_homebrew
   if command -v brew >/dev/null 2>&1; then
@@ -62,24 +106,27 @@ install_dependencies() {
 }
 
 download_repo() {
-  local tmp_dir archive extracted_dir
+  local tmp_dir archive
   tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ohmyvoice-install.XXXXXX")"
   archive="${tmp_dir}/ohmyvoice.tar.gz"
   trap 'rm -rf "${tmp_dir}"' EXIT
 
   echo "[2/3] Downloading ohmyvoice (${REPO}@${REF})..."
   curl -fsSL "${ARCHIVE_URL}" -o "${archive}"
-  tar -xzf "${archive}" -C "${tmp_dir}"
+  mkdir -p "$(dirname "${INSTALL_DIR}")"
 
-  extracted_dir="$(find "${tmp_dir}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-  if [ -z "${extracted_dir}" ]; then
-    echo "Failed to unpack ${ARCHIVE_URL}" >&2
+  if [ -e "${INSTALL_DIR}" ] && [ ! -d "${INSTALL_DIR}" ]; then
+    echo "Install path exists but is not a directory: ${INSTALL_DIR}" >&2
     exit 1
   fi
 
-  rm -rf "${INSTALL_DIR}"
-  mkdir -p "$(dirname "${INSTALL_DIR}")"
-  mv "${extracted_dir}" "${INSTALL_DIR}"
+  if [ -d "${INSTALL_DIR}" ]; then
+    echo "  Preserving existing files in ${INSTALL_DIR}"
+  else
+    mkdir -p "${INSTALL_DIR}"
+  fi
+
+  tar -xzf "${archive}" --strip-components=1 -C "${INSTALL_DIR}"
 
   trap - EXIT
   rm -rf "${tmp_dir}"
@@ -101,6 +148,7 @@ else
   echo "[1/3] Skipping package installation (OHMYVOICE_SKIP_PACKAGE_INSTALL=1)."
 fi
 
+ensure_node_runtime
 download_repo
 run_setup
 

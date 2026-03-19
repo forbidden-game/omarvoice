@@ -10,6 +10,40 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="${PROJECT_DIR}/contrib/sensevoice-backend"
 VENV_DIR="${BACKEND_DIR}/.venv"
 
+node_major() {
+  local node_bin="${1:-}"
+  if [ -z "${node_bin}" ] || [ ! -x "${node_bin}" ]; then
+    echo 0
+    return
+  fi
+
+  "${node_bin}" -p "process.versions.node.split('.')[0]"
+}
+
+resolve_node_bin() {
+  local brew_prefix
+
+  if [ -n "${OHMYVOICE_NODE_BIN:-}" ] && [ -x "${OHMYVOICE_NODE_BIN}" ]; then
+    printf '%s\n' "${OHMYVOICE_NODE_BIN}"
+    return 0
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    brew_prefix="$(brew --prefix node 2>/dev/null || true)"
+    if [ -n "${brew_prefix}" ] && [ -x "${brew_prefix}/bin/node" ]; then
+      printf '%s\n' "${brew_prefix}/bin/node"
+      return 0
+    fi
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+
+  return 1
+}
+
 echo "=== ohmyvoice macOS setup ==="
 echo ""
 
@@ -20,7 +54,15 @@ echo ""
 echo "[1/6] Checking dependencies..."
 
 missing=()
-command -v node >/dev/null 2>&1 || missing+=("node")
+NODE_BIN="$(resolve_node_bin || true)"
+
+if [ -z "${NODE_BIN}" ]; then
+  missing+=("node")
+else
+  export OHMYVOICE_NODE_BIN="${NODE_BIN}"
+  export PATH="$(dirname "${NODE_BIN}"):${PATH}"
+fi
+
 command -v npm >/dev/null 2>&1 || missing+=("npm")
 command -v ffmpeg >/dev/null 2>&1 || missing+=("ffmpeg")
 command -v python3 >/dev/null 2>&1 || missing+=("python3")
@@ -36,6 +78,11 @@ if [ ${#missing[@]} -gt 0 ]; then
   echo "Install them with:"
   echo "  brew install node ffmpeg python3"
   echo "  brew install --cask hammerspoon"
+  exit 1
+fi
+
+if [ "$(node_major "${NODE_BIN}")" -lt 20 ]; then
+  echo "Node.js 20+ is required. Current version: $("${NODE_BIN}" --version)" >&2
   exit 1
 fi
 
