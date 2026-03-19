@@ -3,13 +3,10 @@
 ## Quick Start
 
 ```bash
-brew install node ffmpeg python3
-brew install --cask hammerspoon
-
-git clone https://github.com/forbidden-game/ohmyvoice.git && cd ohmyvoice && ./setup-macos.sh
+curl -fsSL https://raw.githubusercontent.com/forbidden-game/ohmyvoice/main/install-macos.sh | bash
 ```
 
-The setup script handles building, Python venv, model download, and Hammerspoon integration. Grant **Accessibility** and **Microphone** to Hammerspoon when prompted.
+The installer bootstraps Homebrew if needed, installs dependencies, downloads ohmyvoice to `~/.local/share/ohmyvoice`, and runs `setup-macos.sh`. Grant **Accessibility** and **Microphone** to Hammerspoon when prompted.
 
 ## Manual Setup
 

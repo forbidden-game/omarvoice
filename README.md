@@ -54,27 +54,20 @@ That's it. No GUI, no electron app — just a lightweight daemon and a CLI.
 
 ### macOS
 
-**1. Install dependencies**
+**1. Install**
 
 ```bash
-brew install node ffmpeg python3
-brew install --cask hammerspoon
+curl -fsSL https://raw.githubusercontent.com/forbidden-game/ohmyvoice/main/install-macos.sh | bash
 ```
 
-**2. One-command setup**
+This installer bootstraps Homebrew if needed, installs `node`, `ffmpeg`, `python3`, and Hammerspoon, downloads ohmyvoice to `~/.local/share/ohmyvoice`, and runs the full macOS setup script.
 
-```bash
-git clone https://github.com/forbidden-game/ohmyvoice.git && cd ohmyvoice && ./setup-macos.sh
-```
-
-This builds the project, creates a local Python venv with SenseVoice dependencies, downloads the model (~228 MB), installs the Hammerspoon integration, and triggers the microphone permission prompt.
-
-**3. Grant permissions**
+**2. Grant permissions**
 
 - **Accessibility**: System Settings → Privacy & Security → Accessibility → Hammerspoon
 - **Microphone**: System Settings → Privacy & Security → Microphone → Hammerspoon
 
-**4. Use it**
+**3. Use it**
 
 Hold **Right Command** to record, release to stop. Transcript appears in your clipboard.
 
@@ -86,61 +79,64 @@ The SenseVoice backend starts and stops automatically with the daemon — no nee
 
 ### Linux (Wayland / Hyprland)
 
-**1. Install dependencies**
+**1. Install**
 
 ```bash
-# Arch / pacman
-sudo pacman -S nodejs npm pipewire pw-record wl-clipboard libnotify
-
-# Ubuntu / apt
-sudo apt install nodejs npm pipewire-tools wl-clipboard libnotify-bin
+curl -fsSL https://raw.githubusercontent.com/forbidden-game/ohmyvoice/main/install-linux.sh | bash
 ```
 
-Preflight check:
+The Linux installer supports `apt` and `pacman`. It installs dependencies, downloads ohmyvoice to `~/.local/share/ohmyvoice`, builds the project, creates the local Python backend, downloads the bundled SenseVoice model, and installs CLI wrappers into `~/.local/bin`.
+
+If Hyprland is detected, it also writes `~/.config/hypr/ohmyvoice.conf`, adds a `source = .../ohmyvoice.conf` line to your main Hyprland config if needed, and reloads Hyprland.
+
+That auto-config path binds **CapsLock** by default. Advanced: if you run `setup-linux.sh` manually and want to skip Hyprland config edits, set `OHMYVOICE_HYPRLAND_AUTOCONFIG=0`.
+
+**2. Start the daemon manually** (non-Hyprland Wayland)
 
 ```bash
-for cmd in node npm pw-record pw-play wl-copy notify-send; do
-  command -v "$cmd" >/dev/null || echo "Missing: $cmd"
-done
+~/.local/bin/ohmyvoice-ensure-daemon
 ```
 
-**2. Build**
-
-```bash
-git clone https://github.com/forbidden-game/ohmyvoice.git && cd ohmyvoice && npm ci && npm run build
-```
-
-**3. Start the daemon**
-
-```bash
-VOICE_ENDPOINT=http://127.0.0.1:8000/v1/chat/completions node dist/daemon.js
-```
-
-**4. Bind a hotkey** (Hyprland example — CapsLock)
+**3. Bind a hotkey** (if your compositor was not auto-configured)
 
 Add to `~/.config/hypr/hyprland.conf`:
 
 ```ini
-bind = , code:66, exec, voicectl start
-bindr = , code:66, exec, voicectl stop
+bind = , code:66, exec, ~/.local/bin/voicectl start
+bindr = , code:66, exec, ~/.local/bin/voicectl stop
 ```
 
 ```bash
-npm link          # makes voicectl available globally
 hyprctl reload
 ```
 
 Hold **CapsLock** to record, release to stop.
 
+The Linux installer defaults to the bundled local SenseVoice backend by exporting `VOICE_BACKEND=managed` in the generated `voice-daemon` wrapper.
+
 ---
 
-## Manual Trigger (Any Platform)
+### Windows
+
+Windows is **not supported yet**.
+
+Current blockers:
+
+- Recording defaults are macOS- and Wayland-specific (`ffmpeg avfoundation` / `pw-record`)
+- Clipboard and notification integration are macOS- and Linux-specific (`pbcopy`, `wl-copy`, `notify-send`, `osascript`)
+- There is no Windows global hotkey integration in this repo yet
+
+If we decide to support Windows next, the right path is a dedicated PowerShell installer plus Windows defaults in [`src/config.ts`](src/config.ts) and a native hotkey bridge.
+
+---
+
+## Manual Trigger (Supported Platforms)
 
 You can also trigger recording without a hotkey:
 
 ```bash
 # Start daemon
-VOICE_ENDPOINT=http://127.0.0.1:8000/v1/chat/completions node dist/daemon.js
+VOICE_BACKEND=managed VOICE_ENDPOINT=http://127.0.0.1:8000/v1/chat/completions node dist/daemon.js
 
 # In another terminal
 node dist/cli.js start   # begin recording
