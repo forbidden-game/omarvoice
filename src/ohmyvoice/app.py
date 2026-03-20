@@ -3,6 +3,7 @@ import threading
 import time
 
 import rumps
+from AppKit import NSImage, NSImageRep
 
 
 _FILLER_WORDS = r'(?:呃|嗯|啊|哦|额|唔|那个|就是说|然后吧)+'
@@ -30,16 +31,37 @@ from ohmyvoice.ui_bridge import UIBridge
 
 from ohmyvoice.paths import get_resources_dir
 _ICONS = get_resources_dir() / "icons"
+_ICON_POINT_SIZE = (18, 18)
+
+
+def _load_status_icon(icon_name: str, template: bool) -> NSImage:
+    """Build a status bar icon with 1x and 2x image reps."""
+    image = NSImage.alloc().initWithSize_(_ICON_POINT_SIZE)
+    base_path = _ICONS / icon_name
+    retina_path = base_path.with_name(f"{base_path.stem}@2x{base_path.suffix}")
+
+    for path in (base_path, retina_path):
+        if not path.exists():
+            continue
+        rep = NSImageRep.imageRepWithContentsOfFile_(str(path))
+        if rep is None:
+            continue
+        rep.setSize_(_ICON_POINT_SIZE)
+        image.addRepresentation_(rep)
+
+    image.setTemplate_(template)
+    return image
 
 
 class OhMyVoiceApp(rumps.App):
     def __init__(self):
         super().__init__(
             name="OhMyVoice",
-            icon=str(_ICONS / "mic_idle.png"),
+            icon=None,
+            template=True,
             quit_button=None,
         )
-        self.template = True
+        self._set_icon("mic_idle.png", template=True)
         self._settings = Settings()
         self._history = HistoryDB()
         self._recorder = Recorder(
@@ -141,8 +163,14 @@ class OhMyVoiceApp(rumps.App):
             "done": ("mic_done.png", False),
         }
         icon_name, template = icon_map.get(state, ("mic_idle.png", True))
-        self.icon = str(_ICONS / icon_name)
-        self.template = template
+        self._set_icon(icon_name, template)
+
+    def _set_icon(self, icon_name: str, template: bool):
+        self._icon = str(_ICONS / icon_name)
+        self._template = template
+        self._icon_nsimage = _load_status_icon(icon_name, template)
+        if hasattr(self, "_nsapp"):
+            self._nsapp.setStatusBarIcon()
 
     def _update_recent_menu(self):
         try:
