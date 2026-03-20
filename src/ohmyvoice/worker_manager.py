@@ -36,16 +36,14 @@ class WorkerManager:
         on_error: Callable[[str], None],
         on_state_change: Callable[[str], None],
         on_model_loaded: Callable[[str], None] | None = None,
-        ttl_seconds: float = 180.0,
     ):
         self._on_result = on_result
         self._on_error = on_error
         self._on_state_change = on_state_change
         self._on_model_loaded = on_model_loaded
-        self._ttl_seconds = ttl_seconds
 
         self._lock = threading.Lock()
-        self._app_state = "loading"
+        self._app_state = "idle"
         self._worker_state = "dead"
         self._worker_gen = 0
         self._proc: subprocess.Popen | None = None
@@ -53,7 +51,6 @@ class WorkerManager:
         self._active_job: PendingJob | None = None
         self._desired_quantization = "4bit"
         self._loaded_quantization: str | None = None
-        self._ttl_timer: threading.Timer | None = None
         self._done_timer: threading.Timer | None = None
 
     # --- Properties ---
@@ -73,10 +70,8 @@ class WorkerManager:
     # --- Public API ---
 
     def start(self, quantization: str = "4bit"):
-        """Spawn worker and begin initial model loading."""
+        """Set desired quantization. Worker is spawned on first use."""
         self._desired_quantization = quantization
-        gen = self._respawn_worker()
-        self._send(gen, {"type": "ensure_loaded", "quantization": quantization})
 
     def on_press(self, desired_quantization: str) -> bool:
         """Handle hotkey press. Returns True if recording should start."""
@@ -85,7 +80,6 @@ class WorkerManager:
                 return False
             self._app_state = "recording"
             self._desired_quantization = desired_quantization
-            self._cancel_ttl_locked()
 
             need_respawn = self._worker_state == "dead"
             need_ensure = self._worker_state in ("dead", "starting", "unloaded")
@@ -170,22 +164,14 @@ class WorkerManager:
         self._on_state_change("idle")
 
     def reload_model(self, quantization: str):
-        """Request model reload with new quantization (called from UI bridge)."""
+        """Update desired quantization. Next worker spawn will use it."""
         self._desired_quantization = quantization
-        with self._lock:
-            if self._worker_state in ("ready", "unloaded"):
-                gen = self._worker_gen
-                do_send = True
-            else:
-                do_send = False
-
-        if do_send:
-            self._send(gen, {"type": "ensure_loaded", "quantization": quantization})
+        if self._on_model_loaded:
+            self._on_model_loaded(quantization)
 
     def shutdown(self, timeout: float = 2.0):
         """Graceful shutdown."""
         with self._lock:
-            self._cancel_ttl_locked()
             self._cancel_done_timer_locked()
             gen = self._worker_gen
 
@@ -285,8 +271,7 @@ class WorkerManager:
             self._on_transcribe_done(gen, msg)
         elif msg_type == "transcribe_error":
             self._on_transcribe_error(gen, msg)
-        elif msg_type == "model_unloaded":
-            self._on_model_unloaded(gen)
+        # model_unloaded no longer used (kill-after-use)
 
     def _on_worker_ready(self, gen: int):
         with self._lock:
@@ -305,8 +290,6 @@ class WorkerManager:
         quantization = msg.get("quantization")
 
         has_pending = False
-        start_ttl = False
-        initial_load_done = False
         job = None
 
         with self._lock:
@@ -321,13 +304,7 @@ class WorkerManager:
                 self._active_job = job
                 self._worker_state = "transcribing"
                 has_pending = True
-            elif self._app_state == "recording":
-                pass  # RELEASE will handle it
-            elif self._app_state == "loading":
-                self._app_state = "idle"
-                initial_load_done = True
-            else:
-                start_ttl = True
+            # else: app is recording, RELEASE will handle it
 
             cur_gen = self._worker_gen
 
@@ -340,12 +317,6 @@ class WorkerManager:
                 "sample_rate": job.sample_rate,
                 "context": job.context,
             })
-        if start_ttl:
-            self._start_ttl()
-        if initial_load_done:
-            self._on_state_change("idle")
-        if self._on_model_loaded:
-            self._on_model_loaded(quantization)
 
     def _on_transcribe_done(self, gen: int, msg: dict):
         with self._lock:
@@ -354,7 +325,8 @@ class WorkerManager:
             if not self._active_job or msg.get("job_id") != self._active_job.job_id:
                 return
             self._active_job = None
-            self._worker_state = "ready"
+            self._worker_state = "dead"
+            self._loaded_quantization = None
             self._app_state = "done"
 
         text = msg.get("text", "")
@@ -362,7 +334,7 @@ class WorkerManager:
         duration = msg.get("duration_seconds", 0.0)
         self._on_result(text, language, duration)
         self._on_state_change("done")
-        self._start_ttl()
+        self._send(gen, {"type": "shutdown"})
         self._start_done_timer()
 
     def _on_transcribe_error(self, gen: int, msg: dict):
@@ -372,19 +344,13 @@ class WorkerManager:
             if not self._active_job or msg.get("job_id") != self._active_job.job_id:
                 return
             self._active_job = None
-            self._worker_state = "ready"
+            self._worker_state = "dead"
+            self._loaded_quantization = None
             self._app_state = "idle"
 
         self._on_error(msg.get("message", "Unknown error"))
         self._on_state_change("idle")
-        self._start_ttl()
-
-    def _on_model_unloaded(self, gen: int):
-        with self._lock:
-            if gen != self._worker_gen:
-                return
-            self._worker_state = "unloaded"
-            self._loaded_quantization = None
+        self._send(gen, {"type": "shutdown"})
 
     def _handle_worker_died(self, gen: int):
         need_respawn = False
@@ -393,7 +359,6 @@ class WorkerManager:
                 return
             self._worker_state = "dead"
             self._loaded_quantization = None
-            self._cancel_ttl_locked()
 
             if self._active_job:
                 self._pending_job = self._active_job
@@ -408,20 +373,6 @@ class WorkerManager:
 
     # --- Timers ---
 
-    def _start_ttl(self):
-        with self._lock:
-            self._cancel_ttl_locked()
-            self._ttl_timer = threading.Timer(self._ttl_seconds, self._on_ttl_expired)
-            self._ttl_timer.daemon = True
-            self._ttl_timer.start()
-
-    def _on_ttl_expired(self):
-        with self._lock:
-            if self._worker_state != "ready" or self._app_state != "idle":
-                return
-            gen = self._worker_gen
-        self._send(gen, {"type": "unload_model"})
-
     def _start_done_timer(self):
         with self._lock:
             self._cancel_done_timer_locked()
@@ -435,11 +386,6 @@ class WorkerManager:
                 return
             self._app_state = "idle"
         self._on_state_change("idle")
-
-    def _cancel_ttl_locked(self):
-        if self._ttl_timer:
-            self._ttl_timer.cancel()
-            self._ttl_timer = None
 
     def _cancel_done_timer_locked(self):
         if self._done_timer:

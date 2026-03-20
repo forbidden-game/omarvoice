@@ -195,7 +195,7 @@ class TestModelReady:
         assert m._active_job.job_id == "j1"
         assert m._worker_state == "transcribing"
 
-    def test_during_recording_no_ttl(self):
+    def test_during_recording_stays_ready(self):
         m = _make_manager()
         m._worker_state = "loading"
         m._app_state = "recording"
@@ -204,31 +204,7 @@ class TestModelReady:
         m._on_model_ready(1, {"type": "model_ready", "quantization": "4bit"})
 
         assert m._worker_state == "ready"
-        assert m._ttl_timer is None
-
-    def test_idle_starts_ttl(self):
-        m = _make_manager()
-        m._worker_state = "loading"
-        m._app_state = "idle"
-        m._pending_job = None
-
-        m._on_model_ready(1, {"type": "model_ready", "quantization": "4bit"})
-
-        assert m._worker_state == "ready"
         assert m._loaded_quantization == "4bit"
-        assert m._ttl_timer is not None
-        m._ttl_timer.cancel()
-
-    def test_initial_load_transitions_to_idle(self):
-        states = []
-        m = _make_manager(on_state_change=lambda s: states.append(s))
-        m._app_state = "loading"
-        m._worker_state = "loading"
-
-        m._on_model_ready(1, {"type": "model_ready", "quantization": "4bit"})
-
-        assert m._app_state == "idle"
-        assert "idle" in states
 
 
 class TestTranscribeDone:
@@ -248,7 +224,7 @@ class TestTranscribeDone:
         })
 
         assert m._active_job is None
-        assert m._worker_state == "ready"
+        assert m._worker_state == "dead"
         assert m._app_state == "done"
         assert results == [("hello", "en", 1.5)]
 
@@ -304,7 +280,7 @@ class TestTranscribeError:
         })
 
         assert m._active_job is None
-        assert m._worker_state == "ready"
+        assert m._worker_state == "dead"
         assert m._app_state == "idle"
         assert errors == ["boom"]
 
@@ -346,28 +322,6 @@ class TestWorkerDied:
             m._handle_worker_died(1)
 
 
-class TestTTL:
-    def test_fires_unload_when_ready_idle(self):
-        m = _make_manager()
-        m._worker_state = "ready"
-        m._app_state = "idle"
-
-        m._on_ttl_expired()
-
-        calls = m._proc.stdin.write.call_args_list
-        sent = [json.loads(c[0][0]) for c in calls]
-        assert any(s.get("type") == "unload_model" for s in sent)
-
-    def test_ignored_during_recording(self):
-        m = _make_manager()
-        m._worker_state = "ready"
-        m._app_state = "recording"
-
-        m._on_ttl_expired()
-
-        assert m._proc.stdin.write.call_count == 0
-
-
 class TestDoneTimer:
     def test_transitions_to_idle(self):
         states = []
@@ -380,13 +334,41 @@ class TestDoneTimer:
         assert "idle" in states
 
 
-class TestModelUnloaded:
-    def test_sets_unloaded_state(self):
-        m = _make_manager()
-        m._worker_state = "ready"
-        m._loaded_quantization = "4bit"
+class TestKillAfterUse:
+    def test_transcribe_done_kills_worker(self):
+        m = _make_manager(on_result=_noop)
+        m._worker_state = "transcribing"
+        m._app_state = "processing"
+        m._active_job = PendingJob(
+            job_id="j1", wav_path="/tmp/t.wav", sample_rate=16000,
+            context="", created_at=time.time(),
+        )
 
-        m._on_model_unloaded(1)
+        m._on_transcribe_done(1, {
+            "type": "transcribe_done", "job_id": "j1",
+            "text": "hello", "language": "en", "duration_seconds": 1.0,
+        })
 
-        assert m._worker_state == "unloaded"
-        assert m._loaded_quantization is None
+        assert m._worker_state == "dead"
+        calls = m._proc.stdin.write.call_args_list
+        sent = [json.loads(c[0][0]) for c in calls]
+        assert any(s.get("type") == "shutdown" for s in sent)
+
+    def test_transcribe_error_kills_worker(self):
+        m = _make_manager(on_error=_noop)
+        m._worker_state = "transcribing"
+        m._app_state = "processing"
+        m._active_job = PendingJob(
+            job_id="j1", wav_path="/tmp/t.wav", sample_rate=16000,
+            context="", created_at=time.time(),
+        )
+
+        m._on_transcribe_error(1, {
+            "type": "transcribe_error", "job_id": "j1",
+            "message": "boom",
+        })
+
+        assert m._worker_state == "dead"
+        calls = m._proc.stdin.write.call_args_list
+        sent = [json.loads(c[0][0]) for c in calls]
+        assert any(s.get("type") == "shutdown" for s in sent)

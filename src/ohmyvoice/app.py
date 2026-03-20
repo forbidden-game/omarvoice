@@ -76,6 +76,7 @@ class OhMyVoiceApp(rumps.App):
         self._build_menu()
         self._start_hotkey()
         self._manager.start(quantization=self._settings.model_quantization)
+        self.menu["状态: 加载中..."].title = f"就绪 · {self._settings.hotkey_display}"
 
     def _build_menu(self):
         self.menu = [
@@ -144,11 +145,7 @@ class OhMyVoiceApp(rumps.App):
         self._set_state(new_state)
 
     def _handle_model_loaded(self, quantization):
-        try:
-            item = self.menu["状态: 加载中..."]
-            item.title = f"就绪 · {self._settings.hotkey_display}"
-        except KeyError:
-            pass
+        """Called when quantization is changed via settings UI."""
         if self._ui_bridge.is_running:
             self._ui_bridge.notify_model_reloaded()
 
