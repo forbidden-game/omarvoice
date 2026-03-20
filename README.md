@@ -74,6 +74,20 @@ make dist
 make dmg
 ```
 
+## Acknowledgments
+
+OhMyVoice 站在这些项目的肩膀上：
+
+| 项目 | 用途 |
+|------|------|
+| [MLX](https://github.com/ml-explore/mlx) | Apple 开源的机器学习框架，驱动 Metal GPU 推理 |
+| [mlx-qwen3-asr](https://github.com/moona3k/mlx-qwen3-asr) | Qwen3-ASR 的 MLX 推理实现 |
+| [Qwen3-ASR](https://github.com/QwenLM/Qwen3) | 通义千问语音识别模型 |
+| [rumps](https://github.com/jaredks/rumps) | macOS 菜单栏应用框架 |
+| [PyObjC](https://github.com/ronaldoussoren/pyobjc) | Python ↔ Objective-C bridge |
+| [sounddevice](https://github.com/spatialaudio/python-sounddevice) | PortAudio 的 Python 绑定，负责录音 |
+| [Hugging Face Hub](https://github.com/huggingface/huggingface_hub) | 模型下载与缓存 |
+
 ## License
 
 MIT
