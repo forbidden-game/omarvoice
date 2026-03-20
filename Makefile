@@ -32,12 +32,15 @@ dist: build-swift
 	cp -R resources/sounds dist/OhMyVoice.app/Contents/Resources/sounds 2>/dev/null || true
 	cp resources/AppIcon.icns dist/OhMyVoice.app/Contents/Resources/AppIcon.icns 2>/dev/null || true
 	cp ui/.build/release/ohmyvoice-ui dist/OhMyVoice.app/Contents/MacOS/
+	@# mlx Metal shaders are not picked up by PyInstaller — copy manually
+	cp .venv/lib/python3.13/site-packages/mlx/lib/mlx.metallib \
+		dist/OhMyVoice.app/Contents/Frameworks/mlx/lib/
 
 app: dist
 
 sign:
-	@# inside-out signing: _internal/ Mach-O → Swift binary → Python binary → outer bundle
-	find dist/OhMyVoice.app/Contents/MacOS/_internal -type f \( -name '*.dylib' -o -name '*.so' -o -perm +111 \) -exec sh -c \
+	@# inside-out signing: Frameworks/ Mach-O → Swift binary → Python binary → outer bundle
+	find dist/OhMyVoice.app/Contents/Frameworks -type f \( -name '*.dylib' -o -name '*.so' -o -perm +111 \) -exec sh -c \
 		'file "$$1" | grep -q "Mach-O" && codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" "$$1"' _ {} \;
 	codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" \
 		dist/OhMyVoice.app/Contents/MacOS/ohmyvoice-ui
