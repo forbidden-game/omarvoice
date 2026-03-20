@@ -26,8 +26,8 @@ from ohmyvoice.history import HistoryDB
 from ohmyvoice.hotkey import HotkeyManager
 from ohmyvoice.notification import send_notification
 from ohmyvoice.recorder import Recorder
-from ohmyvoice.preferences import PreferencesWindow
 from ohmyvoice.settings import Settings
+from ohmyvoice.ui_bridge import UIBridge
 
 _ICONS = Path(__file__).parent.parent.parent / "resources" / "icons"
 
@@ -47,7 +47,7 @@ class OhMyVoiceApp(rumps.App):
         )
         self._engine = ASREngine()
         self._hotkey: HotkeyManager | None = None
-        self._prefs_window = None
+        self._ui_bridge = UIBridge(self)
         self._state = "idle"
         self._build_menu()
         self._load_model_async()
@@ -161,26 +161,10 @@ class OhMyVoiceApp(rumps.App):
             pass  # non-critical: menu display only
 
     def _on_settings(self, _):
-        if self._prefs_window is None:
-            self._prefs_window = PreferencesWindow(self)
-        self._prefs_window.show()
+        self._ui_bridge.open_preferences()
 
     def _on_history(self, _):
-        records = self._history.recent(20)
-        if not records:
-            rumps.alert("历史记录", "暂无转写记录")
-            return
-        text = "\n\n".join(
-            f"[{r['created_at']}] {r['text']}" for r in records
-        )
-        w = rumps.Window(
-            message=text,
-            title="转写历史",
-            ok="关闭",
-            cancel=None,
-            dimensions=(500, 300),
-        )
-        w.run()
+        self._ui_bridge.open_history()
 
     def _on_quit(self, _):
         if self._hotkey:
