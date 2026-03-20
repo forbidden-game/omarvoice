@@ -57,7 +57,8 @@ OhMyVoice.app/
 
 关键配置：
 - **入口**：`src/ohmyvoice/__main__.py`
-- **hiddenimports**：`mlx`、`mlx.core`、`mlx.nn`、`mlx_qwen3_asr`、`sounddevice`、`_sounddevice_data`、`rumps`、`numpy`、`huggingface_hub`
+- **hiddenimports**：`mlx`、`mlx.core`、`mlx.nn`、`mlx_qwen3_asr`、`sounddevice`、`_sounddevice_data`、`rumps`、`numpy`、`huggingface_hub`、`AppKit`、`Quartz`、`Foundation`、`objc`（PyObjC 用 runtime `__import__` 和 `objc.loadBundle`，PyInstaller 无法自动追踪）
+- **collect_submodules**：`AppKit`、`Quartz`（确保 PyObjC bridge 的子模块完整收集）
 - **excludes**：`pytest`、`_pytest`、`coverage`、`pip`、`setuptools`
 - **BUNDLE** 参数：`name='OhMyVoice'`、`bundle_identifier='com.ohmyvoice.app'`、`icon='resources/AppIcon.icns'`
 - **Info.plist 覆盖**：
@@ -189,7 +190,8 @@ set -euo pipefail
 # APPLE_TEAM_ID             - Team ID
 # APP_PASSWORD              - app-specific password for notarytool
 
-VERSION=$(python -c "from ohmyvoice import __version__; print(__version__)")
+# 从源码文件直接提取版本号，不依赖 pip install
+VERSION=$(grep -oP '(?<=__version__ = ").*(?=")' src/ohmyvoice/__init__.py)
 APP_NAME="OhMyVoice"
 DMG_NAME="${APP_NAME}-${VERSION}-arm64.dmg"
 APP_DIR="dist/${APP_NAME}.app"
@@ -216,9 +218,13 @@ done
 
 # Step 5: Inside-out code signing
 # 不用 --deep，逐层签名确保公证通过
-# 5a: _internal/ 内所有 .so/.dylib（PyInstaller 6.x 把依赖放这里，不是 Frameworks/）
-find "${APP_DIR}/Contents/MacOS/_internal" \( -name '*.dylib' -o -name '*.so' \) | while read lib; do
-  codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" "$lib"
+# 5a: _internal/ 内所有可签名文件（PyInstaller 6.x 把依赖放这里）
+# 包括 .so、.dylib 和无扩展名的 Mach-O 可执行文件（如 Python framework）
+find "${APP_DIR}/Contents/MacOS/_internal" -type f \( -name '*.dylib' -o -name '*.so' -o -perm +111 \) | while read bin; do
+  # 只签名 Mach-O 文件，跳过 .py/.pyc/数据文件
+  if file "$bin" | grep -q "Mach-O"; then
+    codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" "$bin"
+  fi
 done
 
 # 5b: Swift UI binary（不需要 Python 侧的宽松 entitlements）
@@ -251,6 +257,7 @@ rm "dist/${APP_NAME}.zip"
 xcrun stapler staple "${APP_DIR}"
 
 # Step 8: Create DMG
+rm -f "dist/${DMG_NAME}"
 create-dmg \
   --volname "${APP_NAME}" \
   --window-size 600 400 \
@@ -286,6 +293,8 @@ xcrun stapler staple "dist/${DMG_NAME}"
     <true/>
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
     <key>com.apple.security.cs.disable-library-validation</key>
@@ -297,6 +306,7 @@ xcrun stapler staple "dist/${DMG_NAME}"
 说明：
 - `audio-input`：麦克风权限
 - `apple-events`：剪贴板操作可能需要
+- `allow-jit`：MLX Metal JIT 内核编译需要（hardened runtime 下必须显式声明）
 - `allow-unsigned-executable-memory`：MLX Metal JIT 编译需要
 - `disable-library-validation`：PyInstaller 打包的 dylib 签名链不完整时需要
 
@@ -307,7 +317,7 @@ xcrun stapler staple "dist/${DMG_NAME}"
 ## 8. Makefile 扩展
 
 ```makefile
-VERSION := $(shell python -c "from ohmyvoice import __version__; print(__version__)")
+VERSION := $(shell grep -oP '(?<=__version__ = ").*(?=")' src/ohmyvoice/__init__.py)
 
 dist: build-swift
 	pyinstaller ohmyvoice.spec --noconfirm
@@ -318,9 +328,9 @@ dist: build-swift
 app: dist  # alias
 
 sign:
-	@# inside-out signing: _internal/ dylibs → Swift binary → Python binary → outer bundle
-	find dist/OhMyVoice.app/Contents/MacOS/_internal \( -name '*.dylib' -o -name '*.so' \) | \
-		xargs -I{} codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" {}
+	@# inside-out signing: _internal/ Mach-O → Swift binary → Python binary → outer bundle
+	find dist/OhMyVoice.app/Contents/MacOS/_internal -type f \( -name '*.dylib' -o -name '*.so' -o -perm +111 \) -exec sh -c \
+		'file "$$1" | grep -q "Mach-O" && codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" "$$1"' _ {} \;
 	codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" \
 		dist/OhMyVoice.app/Contents/MacOS/ohmyvoice-ui
 	codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" \
@@ -337,10 +347,16 @@ notarize:
 	xcrun stapler staple dist/OhMyVoice.app
 
 dmg: dist sign notarize
+	rm -f dist/OhMyVoice-$(VERSION)-arm64.dmg
 	create-dmg --volname OhMyVoice --window-size 600 400 \
 		--icon-size 128 --icon OhMyVoice.app 150 200 \
 		--app-drop-link 450 200 \
 		dist/OhMyVoice-$(VERSION)-arm64.dmg dist/OhMyVoice.app
+	codesign --sign "$(DEVELOPER_ID_APPLICATION)" dist/OhMyVoice-$(VERSION)-arm64.dmg
+	xcrun notarytool submit dist/OhMyVoice-$(VERSION)-arm64.dmg \
+		--apple-id "$(APPLE_ID)" --team-id "$(APPLE_TEAM_ID)" \
+		--password "$(APP_PASSWORD)" --wait
+	xcrun stapler staple dist/OhMyVoice-$(VERSION)-arm64.dmg
 ```
 
 ## 9. 新增依赖
