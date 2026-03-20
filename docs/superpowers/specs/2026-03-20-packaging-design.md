@@ -29,21 +29,27 @@ OhMyVoice.app/
     ├── Info.plist
     ├── MacOS/
     │   ├── ohmyvoice           # PyInstaller 主可执行文件
-    │   └── ohmyvoice-ui        # Swift 编译产物
-    ├── Resources/
-    │   ├── icons/
-    │   │   ├── mic_idle.png
-    │   │   ├── mic_idle@2x.png
-    │   │   ├── mic_recording.png
-    │   │   ├── mic_recording@2x.png
-    │   │   ├── mic_processing.png
-    │   │   ├── mic_processing@2x.png
-    │   │   ├── mic_done.png
-    │   │   └── mic_done@2x.png
-    │   ├── sounds/
-    │   └── AppIcon.icns
-    └── Frameworks/             # PyInstaller 放 dylib
+    │   ├── ohmyvoice-ui        # Swift 编译产物（post-build copy）
+    │   └── _internal/          # PyInstaller 6.x 放 Python 运行时和所有 .so/.dylib
+    │       ├── lib-dynload/
+    │       ├── mlx/
+    │       ├── numpy/
+    │       └── ...
+    └── Resources/              # post-build copy 的静态资源
+        ├── icons/
+        │   ├── mic_idle.png
+        │   ├── mic_idle@2x.png
+        │   ├── mic_recording.png
+        │   ├── mic_recording@2x.png
+        │   ├── mic_processing.png
+        │   ├── mic_processing@2x.png
+        │   ├── mic_done.png
+        │   └── mic_done@2x.png
+        ├── sounds/
+        └── AppIcon.icns
 ```
+
+注意：PyInstaller 6.x `--onedir --windowed` 不生成 `Contents/Frameworks/`，所有 `.so`/`.dylib` 在 `Contents/MacOS/_internal/` 内。签名必须覆盖这个目录。
 
 ## 3. PyInstaller .spec 文件
 
@@ -87,21 +93,41 @@ def get_resources_dir() -> Path:
 
 ### 4b. 自启动（修改 `autostart.py`）
 
-frozen 状态下，plist 的 `ProgramArguments` 改为：
+`generate_plist()` 需要区分两种运行模式：
 
 ```python
-if getattr(sys, "frozen", False):
-    # .app bundle: Contents/MacOS/ohmyvoice → 向上两级得到 .app 路径
-    app_path = str(Path(sys.executable).parent.parent.parent)
-    return f"""...
-    <array>
+def generate_plist() -> str:
+    if getattr(sys, "frozen", False):
+        # .app bundle: Contents/MacOS/ohmyvoice → 向上三级得到 .app 路径
+        app_path = str(Path(sys.executable).parent.parent.parent)
+        program_args = f"""
         <string>open</string>
-        <string>{app_path}</string>
+        <string>{app_path}</string>"""
+    else:
+        # 开发环境：python -m ohmyvoice.app
+        program_args = f"""
+        <string>{sys.executable}</string>
+        <string>-m</string>
+        <string>ohmyvoice.app</string>"""
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ohmyvoice.app</string>
+    <key>ProgramArguments</key>
+    <array>{program_args}
     </array>
-    ..."""
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>"""
 ```
 
-用 `open` 命令启动 .app bundle，macOS 会正确处理单实例和激活。
+`enable()` 和 `disable()` 保持不变，调用 `generate_plist()` 时不再传参。原来的 `python_path` 和 `module` 参数移除。
 
 ### 4c. ui_bridge.py `_find_binary` 搜索顺序调整
 
@@ -190,8 +216,8 @@ done
 
 # Step 5: Inside-out code signing
 # 不用 --deep，逐层签名确保公证通过
-# 5a: Frameworks / dylibs
-find "${APP_DIR}/Contents/Frameworks" -name '*.dylib' -o -name '*.so' | while read lib; do
+# 5a: _internal/ 内所有 .so/.dylib（PyInstaller 6.x 把依赖放这里，不是 Frameworks/）
+find "${APP_DIR}/Contents/MacOS/_internal" \( -name '*.dylib' -o -name '*.so' \) | while read lib; do
   codesign --force --options runtime --sign "${DEVELOPER_ID_APPLICATION}" "$lib"
 done
 
@@ -234,8 +260,14 @@ create-dmg \
   "dist/${DMG_NAME}" \
   "${APP_DIR}"
 
-# Step 9: Sign DMG
+# Step 9: Sign and notarize DMG
 codesign --sign "${DEVELOPER_ID_APPLICATION}" "dist/${DMG_NAME}"
+xcrun notarytool submit "dist/${DMG_NAME}" \
+  --apple-id "${APPLE_ID}" \
+  --team-id "${APPLE_TEAM_ID}" \
+  --password "${APP_PASSWORD}" \
+  --wait
+xcrun stapler staple "dist/${DMG_NAME}"
 ```
 
 ## 7. Entitlements
@@ -286,8 +318,8 @@ dist: build-swift
 app: dist  # alias
 
 sign:
-	@# inside-out signing: frameworks → Swift binary → Python binary → outer bundle
-	find dist/OhMyVoice.app/Contents/Frameworks -name '*.dylib' -o -name '*.so' | \
+	@# inside-out signing: _internal/ dylibs → Swift binary → Python binary → outer bundle
+	find dist/OhMyVoice.app/Contents/MacOS/_internal \( -name '*.dylib' -o -name '*.so' \) | \
 		xargs -I{} codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" {}
 	codesign --force --options runtime --sign "$(DEVELOPER_ID_APPLICATION)" \
 		dist/OhMyVoice.app/Contents/MacOS/ohmyvoice-ui
