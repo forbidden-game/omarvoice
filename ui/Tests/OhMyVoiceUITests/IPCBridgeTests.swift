@@ -75,3 +75,33 @@ import Foundation
     let msg = IncomingMessage.parse(from: data)
     #expect(msg == nil)
 }
+
+// MARK: - IPCBridge tests
+
+@Test func bridgeSendsReadyOnStart() throws {
+    let transport = MockTransport()
+    let bridge = IPCBridge(transport: transport)
+    bridge.send(.ready)
+    #expect(transport.sentMessages.count == 1)
+    let json = try JSONSerialization.jsonObject(with: transport.sentMessages[0]) as! [String: Any]
+    #expect(json["type"] as? String == "ready")
+}
+
+@Test func bridgeDispatchesIncomingState() async throws {
+    let transport = MockTransport()
+    let bridge = IPCBridge(transport: transport)
+    bridge.startListening()
+
+    transport.feedMessage("""
+    {"type":"state","model_loaded":true,"model_name":"Qwen3","quantization":"4bit","disk_usage":1234,"mic_devices":[],"version":"0.1.0"}
+    """)
+
+    // Give main queue time to dispatch
+    try await Task.sleep(for: .milliseconds(200))
+
+    guard case .state(let payload) = bridge.lastMessage else {
+        Issue.record("Expected .state")
+        return
+    }
+    #expect(payload.modelLoaded == true)
+}
