@@ -66,13 +66,28 @@ Python 负责核心逻辑（热键监听、录音、推理、剪贴板），Swif
 ## Build & Distribute
 
 ```bash
+# 安装打包依赖
+./.venv/bin/pip install -e ".[dev,dist]"
+brew install create-dmg
+
+# 查看本机可用签名身份
+make print-signing-identities
+
+# 首次配置 notarytool 凭据（会交互式提示输入 app-specific password）
+make notary-store-credentials APPLE_ID=your-apple-id@example.com APPLE_TEAM_ID=YOURTEAMID
+
 # 构建 .app bundle（无签名，本地测试用）
 make dist
 
+# 本地测试用 DMG（无签名）
+make dmg-local
+
 # 完整流水线：构建 → 签名 → 公证 → DMG
-# 需要设置环境变量：DEVELOPER_ID_APPLICATION, APPLE_ID, APPLE_TEAM_ID, APP_PASSWORD
+# 默认读取 Keychain 中的 Developer ID Application 证书和 ohmyvoice-notary 凭据
 make dmg
 ```
+
+如果 `make print-signing-identities` 里看不到 `Developer ID Application`，先去 Apple Developer 后台创建并安装该证书，再执行上面的命令。
 
 ## Acknowledgments
 
